@@ -1,6 +1,6 @@
 // Initialize Socket.IO connection with proper configuration
 const socket = io('https://live-production-cf6e.up.railway.app', {
-    transports: ['websocket', 'polling'],
+  transports: ['polling', 'websocket'],
     secure: true,
     rejectUnauthorized: false,
     path: '/socket.io/',
