@@ -1,6 +1,7 @@
 {
-  "name": "video-chat-app",
+  "name": "live-chat-app",
   "version": "1.0.0",
+  "description": "Real-time chat application with video/audio calling",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,10 +11,13 @@
     "express": "^4.18.2",
     "socket.io": "^4.7.2",
     "uuid": "^9.0.1",
-    "simple-peer": "^9.11.1",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "peer": "^1.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
-}
+} 
