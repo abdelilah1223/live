@@ -1,343 +1,359 @@
-document.addEventListener('DOMContentLoaded', () => {
-  // العناصر الأساسية
-  const mainPage = document.getElementById('mainPage');
-  const waitingPage = document.getElementById('waitingPage');
-  const callPage = document.getElementById('callPage');
-  const videoContainer = document.getElementById('videoContainer');
-  
-  // الأزرار
-  const createGroupBtn = document.getElementById('createGroupBtn');
-  const randomCallBtn = document.getElementById('randomCallBtn');
-  const privateCallBtn = document.getElementById('privateCallBtn');
-  const cancelSearchBtn = document.getElementById('cancelSearchBtn');
-  const muteBtn = document.getElementById('muteBtn');
-  const videoBtn = document.getElementById('videoBtn');
-  const endCallBtn = document.getElementById('endCallBtn');
-  const copyLinkBtn = document.getElementById('copyLinkBtn');
-  
-  // المتغيرات العامة
-  let localStream;
-  let peers = {};
-  let currentCallId;
-  let currentCallType;
-  let userId;
-  
-  // الاتصال بالسيرفر
-  const socket = io({
-    query: {
-      userId: getOrCreateUserId()
-    }
-  });
-  
-  // استقبال معرف المستخدم من السيرفر
-  socket.on('userId', (id) => {
-    userId = id;
-    localStorage.setItem('userId', id);
-  });
-  
-  // تهيئة الأحداث
-  initEvents();
-  
-  // الدوال الأساسية
-  function getOrCreateUserId() {
-    let id = localStorage.getItem('userId');
-    if (!id) {
-      id = uuidv4();
-      localStorage.setItem('userId', id);
-    }
-    return id;
-  }
-  
-  function initEvents() {
-    createGroupBtn.addEventListener('click', createGroupCall);
-    randomCallBtn.addEventListener('click', startRandomCall);
-    privateCallBtn.addEventListener('click', startPrivateCall);
-    cancelSearchBtn.addEventListener('click', cancelSearch);
-    muteBtn.addEventListener('click', toggleAudio);
-    videoBtn.addEventListener('click', toggleVideo);
-    endCallBtn.addEventListener('click', endCall);
-    copyLinkBtn.addEventListener('click', copyCallLink);
-    
-    // استقبال المكالمات الواردة
-    socket.on('incomingCall', handleIncomingCall);
-    socket.on('callAccepted', startCallWithUser);
-    socket.on('callRejected', handleCallRejected);
-    socket.on('userJoined', handleUserJoined);
-    socket.on('userLeft', handleUserLeft);
-    socket.on('callFull', handleCallFull);
-    socket.on('userOffline', handleUserOffline);
-  }
-  
-  async function initMedia(constraints = { video: true, audio: true }) {
+// Initialize Socket.IO connection with proper configuration
+const socket = io('https://live-production-cf6e.up.railway.app', {
+    transports: ['websocket', 'polling'],
+    secure: true,
+    rejectUnauthorized: false,
+    path: '/socket.io/',
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    timeout: 20000,
+    forceNew: true,
+    autoConnect: true,
+    upgrade: true,
+    rememberUpgrade: true,
+    withCredentials: false
+});
+
+// Add connection event handlers
+socket.on('connect', () => {
+    console.log('Socket.IO connected successfully');
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Socket.IO connection error:', error);
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('Socket.IO disconnected:', reason);
+});
+
+// Initialize PeerJS
+let peer = null;
+let localStream = null;
+let currentRoomId = null;
+let isMuted = false;
+let isVideoEnabled = true;
+
+// DOM Elements
+const userIdDisplay = document.getElementById('userIdDisplay');
+const userId = document.getElementById('userId');
+const mainMenu = document.getElementById('mainMenu');
+const callInterface = document.getElementById('callInterface');
+const localVideo = document.getElementById('localVideo');
+const remoteVideos = document.getElementById('remoteVideos');
+const incomingCallModal = document.getElementById('incomingCallModal');
+const callerId = document.getElementById('callerId');
+const loadingAnimation = document.getElementById('loadingAnimation');
+
+// Initialize user ID from localStorage or generate new one
+let myUserId = localStorage.getItem('userId');
+if (!myUserId) {
+    myUserId = 'user_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('userId', myUserId);
+}
+
+// Display user ID
+userIdDisplay.classList.remove('hidden');
+userId.textContent = myUserId;
+
+// Register with server
+socket.emit('register', myUserId);
+
+// Initialize media stream
+async function initializeMedia() {
     try {
-      localStream = await navigator.mediaDevices.getUserMedia(constraints);
-      addVideoStream(null, localStream, true);
-      return true;
-    } catch (err) {
-      console.error('Error accessing media devices:', err);
-      alert('لا يمكن الوصول إلى الكاميرا/الميكروفون. يرجى التحقق من الأذونات.');
-      return false;
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+        });
+        localVideo.srcObject = localStream;
+    } catch (error) {
+        console.error('Error accessing media devices:', error);
+        showToast('Error accessing camera and microphone');
     }
-  }
-  
-  function addVideoStream(userId, stream, isLocal = false) {
+}
+
+// Initialize PeerJS with proper configuration
+function initializePeer() {
+    peer = new Peer(undefined, {
+        host: 'live-production-cf6e.up.railway.app',
+        port: 443,
+        path: '/peerjs',
+        secure: true,
+        debug: 3,
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' }
+            ]
+        },
+        sdpSemantics: 'unified-plan',
+        allow_discovery: true,
+        reconnectTimer: 3000,
+        maxRetries: 5
+    });
+
+    peer.on('open', (id) => {
+        console.log('PeerJS connected with ID:', id);
+    });
+
+    peer.on('error', (error) => {
+        console.error('PeerJS error:', error);
+        showToast('Connection error occurred');
+        // Attempt to reconnect
+        setTimeout(() => {
+            if (peer && peer.disconnected) {
+                initializePeer();
+            }
+        }, 3000);
+    });
+
+    // Handle incoming calls
+    peer.on('call', (call) => {
+        if (localStream) {
+            call.answer(localStream);
+            call.on('stream', (remoteStream) => {
+                addVideoStream(remoteStream, call.peer);
+            });
+        }
+    });
+
+    // Handle disconnection
+    peer.on('disconnected', () => {
+        console.log('PeerJS disconnected');
+        showToast('Connection lost. Attempting to reconnect...');
+        setTimeout(() => {
+            if (peer && peer.disconnected) {
+                initializePeer();
+            }
+        }, 3000);
+    });
+}
+
+// Start random call
+async function startRandomCall() {
+    await initializeMedia();
+    initializePeer();
+    showLoading();
+    socket.emit('requestRandomCall');
+}
+
+// Start direct call
+async function startDirectCall() {
+    const targetUserId = document.getElementById('targetUserId').value;
+    if (!targetUserId) {
+        showToast('Please enter a user ID');
+        return;
+    }
+
+    await initializeMedia();
+    initializePeer();
+    showLoading();
+    socket.emit('requestDirectCall', targetUserId);
+}
+
+// Create group call
+async function createGroupCall() {
+    await initializeMedia();
+    initializePeer();
+    showLoading();
+    socket.emit('createGroupCall');
+}
+
+// Handle incoming call
+socket.on('incomingCall', ({ roomId, peerId }) => {
+    currentRoomId = roomId;
+    callerId.textContent = `Incoming call from: ${peerId}`;
+    incomingCallModal.classList.remove('hidden');
+});
+
+// Accept call
+async function acceptCall() {
+    await initializeMedia();
+    initializePeer();
+    incomingCallModal.classList.add('hidden');
+    showCallInterface();
+    socket.emit('acceptCall', currentRoomId);
+}
+
+// Reject call
+function rejectCall() {
+    socket.emit('rejectCall', currentRoomId);
+    incomingCallModal.classList.add('hidden');
+    currentRoomId = null;
+}
+
+// Handle call accepted
+socket.on('callAccepted', ({ roomId, peerId }) => {
+    hideLoading();
+    showCallInterface();
+    connectToPeer(peerId);
+});
+
+// Handle call rejected
+socket.on('callRejected', () => {
+    hideLoading();
+    showToast('Call was rejected');
+    endCall();
+});
+
+// Handle user not available
+socket.on('userNotAvailable', () => {
+    hideLoading();
+    showToast('User is not available');
+});
+
+// Handle user in call
+socket.on('userInCall', () => {
+    hideLoading();
+    showToast('User is in another call');
+});
+
+// Handle no users available
+socket.on('noUsersAvailable', () => {
+    hideLoading();
+    showToast('No users available for random call');
+});
+
+// Handle group call created
+socket.on('groupCallCreated', ({ roomId }) => {
+    currentRoomId = roomId;
+    hideLoading();
+    showCallInterface();
+    const joinLink = `${window.location.origin}?room=${roomId}&type=group`;
+    showToast('Group call created! Share this link: ' + joinLink);
+});
+
+// Connect to peer
+function connectToPeer(peerId) {
+    const call = peer.call(peerId, localStream);
+    call.on('stream', (remoteStream) => {
+        addVideoStream(remoteStream, peerId);
+    });
+}
+
+// Add video stream
+function addVideoStream(stream, peerId) {
+    const videoContainer = document.createElement('div');
+    videoContainer.className = 'video-container';
+    
     const video = document.createElement('video');
     video.srcObject = stream;
     video.autoplay = true;
-    video.className = isLocal ? 'local-video' : 'remote-video';
-    video.dataset.userId = userId || 'local';
+    video.playsInline = true;
     
-    if (isLocal) {
-      video.muted = true;
-    }
+    const peerLabel = document.createElement('div');
+    peerLabel.className = 'absolute top-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded';
+    peerLabel.textContent = peerId;
     
-    const videoWrapper = document.createElement('div');
-    videoWrapper.className = 'video-wrapper';
-    videoWrapper.appendChild(video);
-    
-    if (userId) {
-      const userIdLabel = document.createElement('div');
-      userIdLabel.className = 'user-id';
-      userIdLabel.textContent = userId;
-      videoWrapper.appendChild(userIdLabel);
-    }
-    
-    videoContainer.appendChild(videoWrapper);
-  }
-  
-  function removeVideoStream(userId) {
-    const videoElement = document.querySelector(`video[data-user-id="${userId}"]`);
-    if (videoElement) {
-      videoElement.parentElement.remove();
-    }
-  }
-  
-  // إدارة المكالمات
-  async function createGroupCall() {
-    if (await initMedia()) {
-      currentCallType = 'group';
-      currentCallId = uuidv4();
-      
-      // تحديث URL بمعلومات المكالمة
-      window.history.pushState({}, '', `/?callId=${currentCallId}&type=group`);
-      
-      socket.emit('createGroupCall', currentCallId);
-      showCallPage();
-    }
-  }
-  
-  async function startRandomCall() {
-    if (await initMedia()) {
-      currentCallType = 'random';
-      showWaitingPage();
-      socket.emit('findRandomMatch', userId);
-    }
-  }
-  
-  async function startPrivateCall() {
-    const targetId = document.getElementById('targetUserId').value.trim();
-    if (!targetId) {
-      alert('الرجاء إدخال معرف المستخدم');
-      return;
-    }
-    
-    if (await initMedia()) {
-      currentCallType = 'private';
-      showWaitingPage();
-      socket.emit('startPrivateCall', targetId);
-    }
-  }
-  
-  function handleIncomingCall(data) {
-    if (confirm(`مكالمة واردة من ${data.callerId}. هل تريد قبول المكالمة؟`)) {
-      socket.emit('acceptCall', { callerId: data.callerId });
-      showWaitingPage('جار الاتصال...');
-    } else {
-      socket.emit('rejectCall', data.callerId);
-    }
-  }
-  
-  function startCallWithUser(targetId) {
-    if (!peers[targetId]) {
-      peers[targetId] = createPeer(targetId, true);
-      showCallPage();
-    }
-  }
-  
-  function handleUserJoined(userId) {
-    if (!peers[userId]) {
-      peers[userId] = createPeer(userId, false);
-    }
-  }
-  
-  function createPeer(userId, initiator) {
-    const peer = new SimplePeer({
-      initiator,
-      stream: localStream,
-      config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
-    });
-    
-    peer.on('signal', signal => {
-      socket.emit('relaySignal', { targetId: userId, signal });
-    });
-    
-    peer.on('stream', stream => {
-      addVideoStream(userId, stream);
-    });
-    
-    peer.on('close', () => {
-      removeVideoStream(userId);
-      delete peers[userId];
-    });
-    
-    return peer;
-  }
-  
-  socket.on('relaySignal', ({ senderId, signal }) => {
-    if (peers[senderId] && !peers[senderId].destroyed) {
-      peers[senderId].signal(signal);
-    }
-  });
-  
-  // التحكم في المكالمة
-  function toggleAudio() {
+    videoContainer.appendChild(video);
+    videoContainer.appendChild(peerLabel);
+    remoteVideos.appendChild(videoContainer);
+}
+
+// Toggle mute
+function toggleMute() {
     if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        muteBtn.classList.toggle('active');
-        muteBtn.innerHTML = audioTrack.enabled ? 
-          '<i class="fas fa-microphone"></i>' : 
-          '<i class="fas fa-microphone-slash"></i>';
-      }
+        isMuted = !isMuted;
+        localStream.getAudioTracks().forEach(track => {
+            track.enabled = !isMuted;
+        });
+        const muteButton = document.querySelector('.fa-microphone');
+        muteButton.classList.toggle('fa-microphone-slash');
     }
-  }
-  
-  function toggleVideo() {
+}
+
+// Toggle video
+function toggleVideo() {
     if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        videoBtn.classList.toggle('active');
-        videoBtn.innerHTML = videoTrack.enabled ? 
-          '<i class="fas fa-video"></i>' : 
-          '<i class="fas fa-video-slash"></i>';
-      }
+        isVideoEnabled = !isVideoEnabled;
+        localStream.getVideoTracks().forEach(track => {
+            track.enabled = isVideoEnabled;
+        });
+        const videoButton = document.querySelector('.fa-video');
+        videoButton.classList.toggle('fa-video-slash');
     }
-  }
-  
-  function endCall() {
-    // إغلاق جميع اتصالات Peer
-    Object.keys(peers).forEach(userId => {
-      if (peers[userId] && !peers[userId].destroyed) {
-        peers[userId].destroy();
-      }
-    });
-    peers = {};
-    
-    // إيقاف الوسائط المحلية
+}
+
+// End call
+function endCall() {
     if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
+        localStream.getTracks().forEach(track => track.stop());
     }
+    if (peer) {
+        peer.destroy();
+    }
+    currentRoomId = null;
+    hideCallInterface();
+    showMainMenu();
+    remoteVideos.innerHTML = '';
+}
+
+// Copy user ID
+function copyUserId() {
+    navigator.clipboard.writeText(myUserId);
+    showToast('User ID copied to clipboard');
+}
+
+// Show/hide loading animation
+function showLoading() {
+    loadingAnimation.classList.remove('hidden');
+}
+
+function hideLoading() {
+    loadingAnimation.classList.add('hidden');
+}
+
+// Show/hide main menu
+function showMainMenu() {
+    mainMenu.classList.remove('hidden');
+    callInterface.classList.add('hidden');
+}
+
+function hideMainMenu() {
+    mainMenu.classList.add('hidden');
+}
+
+// Show/hide call interface
+function showCallInterface() {
+    mainMenu.classList.add('hidden');
+    callInterface.classList.remove('hidden');
+}
+
+function hideCallInterface() {
+    callInterface.classList.add('hidden');
+    mainMenu.classList.remove('hidden');
+}
+
+// Show toast notification
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
     
-    // إعلام السيرفر بإنهاء المكالمة
-    if (currentCallId) {
-      socket.emit('leaveCall', { callId: currentCallId, callType: currentCallType });
-    }
-    
-    // العودة إلى الصفحة الرئيسية
-    showMainPage();
-    window.history.pushState({}, '', '/');
-  }
-  
-  function copyCallLink() {
-    if (currentCallId && currentCallType === 'group') {
-      const callLink = `${window.location.origin}/?callId=${currentCallId}&type=group`;
-      navigator.clipboard.writeText(callLink)
-        .then(() => alert('تم نسخ رابط المكالمة بنجاح'))
-        .catch(() => alert('فشل نسخ الرابط'));
-    }
-  }
-  
-  // إدارة الصفحات
-  function showMainPage() {
-    mainPage.classList.remove('hidden');
-    waitingPage.classList.add('hidden');
-    callPage.classList.add('hidden');
-  }
-  
-  function showWaitingPage(message = 'جار البحث عن مستخدم...') {
-    mainPage.classList.add('hidden');
-    waitingPage.classList.remove('hidden');
-    callPage.classList.add('hidden');
-    
-    const waitingMessage = waitingPage.querySelector('p');
-    if (waitingMessage) {
-      waitingMessage.textContent = message;
-    }
-  }
-  
-  function showCallPage() {
-    mainPage.classList.add('hidden');
-    waitingPage.classList.add('hidden');
-    callPage.classList.remove('hidden');
-  }
-  
-  function cancelSearch() {
-    socket.emit('cancelSearch');
-    showMainPage();
-  }
-  
-  // معالجة الأحداث
-  function handleCallRejected(callerId) {
-    alert(`المستخدم ${callerId} رفض المكالمة`);
-    showMainPage();
-  }
-  
-  function handleUserLeft(userId) {
-    removeVideoStream(userId);
-    if (peers[userId]) {
-      peers[userId].destroy();
-      delete peers[userId];
-    }
-  }
-  
-  function handleCallFull() {
-    alert('المكالمة ممتلئة! الحد الأقصى 4 مشاركين');
-    showMainPage();
-  }
-  
-  function handleUserOffline() {
-    alert('المستخدم غير متصل حالياً');
-    showMainPage();
-  }
-  
-  // معالجة معلمات URL عند التحميل
-  function checkUrlParams() {
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+// Handle URL parameters for joining calls
+window.addEventListener('load', () => {
     const urlParams = new URLSearchParams(window.location.search);
-    const callId = urlParams.get('callId');
+    const roomId = urlParams.get('room');
     const callType = urlParams.get('type');
     
-    if (callId && callType === 'group') {
-      currentCallId = callId;
-      currentCallType = 'group';
-      initMedia().then(success => {
-        if (success) {
-          socket.emit('joinGroupCall', callId);
-          showCallPage();
-        }
-      });
+    if (roomId && callType === 'group') {
+        socket.emit('joinGroupCall', roomId);
     }
-  }
-  
-  // بدء التطبيق
-  checkUrlParams();
 });
 
-// دالة إنشاء UUID
-function uuidv4() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
+// Handle peer disconnection
+socket.on('peerDisconnected', () => {
+    showToast('Peer disconnected');
+    endCall();
+}); 
