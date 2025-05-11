@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const { ExpressPeerServer } = require('peer');
 
-// Middleware
+// Middleware Configuration
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST']
@@ -14,18 +14,19 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static('public'));
 
-
+// PeerJS Server Configuration
 const peerServer = ExpressPeerServer(http, {
     debug: true,
-    path: '/',  
+    path: '/',  // Important: This should be '/'
     proxied: true,
     allow_discovery: true,
     generateClientId: () => uuidv4()
 });
 
+// Mount PeerJS server at /peerjs
 app.use('/peerjs', peerServer);
 
-// Socket.IO Server
+// Socket.IO Server Configuration
 const io = new Server(http, {
     cors: {
         origin: '*',
@@ -47,11 +48,26 @@ const io = new Server(http, {
 });
 
 // Store active users and rooms
-const activeUsers = new Map();
-const activeRooms = new Map();
+const activeUsers = new Map();      // userId -> socketId
+const activePeers = new Map();      // userId -> peerId
+const activeRooms = new Map();      // roomId -> [socketId1, socketId2, ...]
 
+// Helper function to check if user is in a call
+function isUserInCall(userId) {
+    const userSocketId = activeUsers.get(userId);
+    if (!userSocketId) return false;
+    
+    for (const room of activeRooms.values()) {
+        if (room.includes(userSocketId)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Socket.IO Connection Handler
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    console.log('New connection:', socket.id);
 
     // Handle user registration
     socket.on('register', (userId) => {
@@ -59,6 +75,14 @@ io.on('connection', (socket) => {
         socket.userId = userId;
         socket.emit('registered', userId);
         console.log(`User ${userId} registered with socket ${socket.id}`);
+    });
+
+    // Handle peer ID registration
+    socket.on('register-peer', (peerId) => {
+        if (socket.userId) {
+            activePeers.set(socket.userId, peerId);
+            console.log(`User ${socket.userId} registered with PeerJS ID ${peerId}`);
+        }
     });
 
     // Handle random call request
@@ -71,8 +95,18 @@ io.on('connection', (socket) => {
             const roomId = uuidv4();
             activeRooms.set(roomId, [socket.id, randomUser[1]]);
             
-            io.to(socket.id).emit('randomCallMatched', { roomId, peerId: randomUser[0] });
-            io.to(randomUser[1]).emit('incomingCall', { roomId, peerId: socket.userId });
+            io.to(socket.id).emit('randomCallMatched', { 
+                roomId, 
+                peerId: randomUser[0],
+                targetPeerId: activePeers.get(randomUser[0])
+            });
+            
+            io.to(randomUser[1]).emit('incomingCall', { 
+                roomId, 
+                peerId: socket.userId,
+                callerPeerId: activePeers.get(socket.userId)
+            });
+            
             console.log(`Random call created between ${socket.userId} and ${randomUser[0]}`);
         } else {
             socket.emit('noUsersAvailable');
@@ -99,7 +133,12 @@ io.on('connection', (socket) => {
         const roomId = uuidv4();
         activeRooms.set(roomId, [socket.id, targetSocketId]);
         
-        io.to(targetSocketId).emit('incomingCall', { roomId, peerId: socket.userId });
+        io.to(targetSocketId).emit('incomingCall', { 
+            roomId, 
+            peerId: socket.userId,
+            callerPeerId: activePeers.get(socket.userId)
+        });
+        
         console.log(`Direct call initiated from ${socket.userId} to ${targetUserId}`);
     });
 
@@ -107,7 +146,12 @@ io.on('connection', (socket) => {
     socket.on('acceptCall', (roomId) => {
         const room = activeRooms.get(roomId);
         if (room) {
-            io.to(room[0]).emit('callAccepted', { roomId, peerId: socket.userId });
+            const [callerSocketId] = room;
+            io.to(callerSocketId).emit('callAccepted', { 
+                roomId, 
+                peerId: socket.userId,
+                targetPeerId: activePeers.get(socket.userId)
+            });
             console.log(`Call accepted in room ${roomId}`);
         }
     });
@@ -116,7 +160,8 @@ io.on('connection', (socket) => {
     socket.on('rejectCall', (roomId) => {
         const room = activeRooms.get(roomId);
         if (room) {
-            io.to(room[0]).emit('callRejected');
+            const [callerSocketId] = room;
+            io.to(callerSocketId).emit('callRejected');
             activeRooms.delete(roomId);
             console.log(`Call rejected in room ${roomId}`);
         }
@@ -148,15 +193,24 @@ io.on('connection', (socket) => {
 
         room.push(socket.id);
         socket.join(roomId);
-        socket.to(roomId).emit('newUserJoined', { peerId: socket.userId });
+        
+        // Notify all participants about the new user
+        socket.to(roomId).emit('newUserJoined', { 
+            peerId: socket.userId,
+            newPeerId: activePeers.get(socket.userId)
+        });
+        
         console.log(`User ${socket.userId} joined group call ${roomId}`);
     });
 
-    // Handle peer signaling
+    // Handle signaling data
     socket.on('signal', ({ roomId, signal, targetPeerId }) => {
         const targetSocketId = activeUsers.get(targetPeerId);
         if (targetSocketId) {
-            io.to(targetSocketId).emit('signal', { peerId: socket.userId, signal });
+            io.to(targetSocketId).emit('signal', { 
+                peerId: socket.userId, 
+                signal 
+            });
         }
     });
 
@@ -165,13 +219,16 @@ io.on('connection', (socket) => {
         console.log('User disconnected:', socket.id);
         if (socket.userId) {
             activeUsers.delete(socket.userId);
+            activePeers.delete(socket.userId);
             
             // Clean up rooms
             for (const [roomId, users] of activeRooms.entries()) {
                 if (users.includes(socket.id)) {
                     users.forEach(userSocketId => {
                         if (userSocketId !== socket.id) {
-                            io.to(userSocketId).emit('peerDisconnected', { peerId: socket.userId });
+                            io.to(userSocketId).emit('peerDisconnected', { 
+                                peerId: socket.userId 
+                            });
                         }
                     });
                     activeRooms.delete(roomId);
@@ -182,18 +239,6 @@ io.on('connection', (socket) => {
     });
 });
 
-function isUserInCall(userId) {
-    const userSocketId = activeUsers.get(userId);
-    if (!userSocketId) return false;
-    
-    for (const room of activeRooms.values()) {
-        if (room.includes(userSocketId)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.status(200).json({
@@ -201,11 +246,24 @@ app.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         activeUsers: activeUsers.size,
+        activePeers: activePeers.size,
         activeRooms: activeRooms.size
     });
 });
 
+// PeerJS server events
+peerServer.on('connection', (client) => {
+    console.log('PeerJS client connected:', client.getId());
+});
+
+peerServer.on('disconnect', (client) => {
+    console.log('PeerJS client disconnected:', client.getId());
+});
+
+// Start server
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
+    console.log(`PeerJS server running at /peerjs`);
+    console.log(`Socket.IO server running at /socket.io/`);
 });
