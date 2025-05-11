@@ -175,15 +175,6 @@ function isUserInCall(userId) {
     return false;
 }
 
-// Add health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
-    });
-});
-
 // Update the port to use environment variable
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
