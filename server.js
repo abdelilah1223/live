@@ -7,8 +7,10 @@ const io = require('socket.io')(http, {
         methods: ["GET", "POST"],
         credentials: true
     },
-    transports: ['websocket', 'polling'],
-    allowEIO3: true
+    transports: ['polling', 'websocket'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
@@ -31,7 +33,9 @@ const peerServer = ExpressPeerServer(http, {
     ssl: {
         key: process.env.SSL_KEY,
         cert: process.env.SSL_CERT
-    }
+    },
+    allow_discovery: true,
+    generateClientId: () => uuidv4()
 });
 
 // Use PeerJS server
