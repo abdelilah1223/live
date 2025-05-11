@@ -73,7 +73,9 @@ function initializePeer() {
             ]
         },
         sdpSemantics: 'unified-plan',
-        allow_discovery: true
+        allow_discovery: true,
+        reconnectTimer: 3000,
+        maxRetries: 5
     });
 
     peer.on('open', (id) => {
@@ -99,6 +101,17 @@ function initializePeer() {
                 addVideoStream(remoteStream, call.peer);
             });
         }
+    });
+
+    // Handle disconnection
+    peer.on('disconnected', () => {
+        console.log('PeerJS disconnected');
+        showToast('Connection lost. Attempting to reconnect...');
+        setTimeout(() => {
+            if (peer && peer.disconnected) {
+                initializePeer();
+            }
+        }, 3000);
     });
 }
 
