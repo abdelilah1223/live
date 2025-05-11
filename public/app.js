@@ -1,9 +1,12 @@
 // Initialize Socket.IO connection with proper configuration
 const socket = io('https://live-production-cf6e.up.railway.app', {
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     secure: true,
     rejectUnauthorized: false,
-    path: '/socket.io/'
+    path: '/socket.io/',
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000
 });
 
 // Initialize PeerJS
@@ -63,9 +66,13 @@ function initializePeer() {
         config: {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' }
             ]
-        }
+        },
+        sdpSemantics: 'unified-plan'
     });
 
     peer.on('open', (id) => {
@@ -75,14 +82,22 @@ function initializePeer() {
     peer.on('error', (error) => {
         console.error('PeerJS error:', error);
         showToast('Connection error occurred');
+        // Attempt to reconnect
+        setTimeout(() => {
+            if (peer && peer.disconnected) {
+                initializePeer();
+            }
+        }, 3000);
     });
 
     // Handle incoming calls
     peer.on('call', (call) => {
-        call.answer(localStream);
-        call.on('stream', (remoteStream) => {
-            addVideoStream(remoteStream, call.peer);
-        });
+        if (localStream) {
+            call.answer(localStream);
+            call.on('stream', (remoteStream) => {
+                addVideoStream(remoteStream, call.peer);
+            });
+        }
     });
 }
 
