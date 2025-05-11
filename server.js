@@ -14,14 +14,15 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static('public'));
 
-// PeerJS Server
+
 const peerServer = ExpressPeerServer(http, {
     debug: true,
-    path: '/peerjs',
+    path: '/',  
     proxied: true,
     allow_discovery: true,
     generateClientId: () => uuidv4()
 });
+
 app.use('/peerjs', peerServer);
 
 // Socket.IO Server
