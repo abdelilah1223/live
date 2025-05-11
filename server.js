@@ -9,9 +9,19 @@ const io = require('socket.io')(http, {
 });
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
+const { ExpressPeerServer } = require('peer');
 
 app.use(cors());
 app.use(express.static('public'));
+
+// Create PeerJS server
+const peerServer = ExpressPeerServer(http, {
+    debug: true,
+    path: '/peerjs'
+});
+
+// Use PeerJS server
+app.use('/peerjs', peerServer);
 
 // Store active users and their sessions
 const activeUsers = new Map();
