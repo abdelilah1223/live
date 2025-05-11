@@ -1,5 +1,5 @@
 // Initialize Socket.IO connection
-const socket = io('live-production-71ed.up.railway.app');
+const socket = io('https://live-production-71ed.up.railway.app');
 
 // Initialize PeerJS
 let peer = null;
@@ -49,13 +49,11 @@ async function initializeMedia() {
 
 // Initialize PeerJS
 function initializePeer() {
-peer = new Peer(undefined, {
-  host: 'http://live-production-71ed.up.railway.app', 
-  port: 3000,
-  path: '/',
-  secure: true
-});
-
+    peer = new Peer(undefined, {
+        host: window.location.hostname,
+        port: 3000,
+        path: '/peerjs'
+    });
 
     peer.on('open', (id) => {
         console.log('PeerJS connected with ID:', id);
@@ -64,6 +62,14 @@ peer = new Peer(undefined, {
     peer.on('error', (error) => {
         console.error('PeerJS error:', error);
         showToast('Connection error occurred');
+    });
+
+    // Handle incoming calls
+    peer.on('call', (call) => {
+        call.answer(localStream);
+        call.on('stream', (remoteStream) => {
+            addVideoStream(remoteStream, call.peer);
+        });
     });
 }
 
@@ -261,7 +267,7 @@ function showToast(message) {
     
     setTimeout(() => {
         toast.remove();
-    }, 9000);
+    }, 3000);
 }
 
 // Handle URL parameters for joining calls
