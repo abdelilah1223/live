@@ -9,7 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const server = http.createServer(app);
 
-// Enhanced CORS configuration
+// Middleware Configuration
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -19,15 +19,16 @@ app.use(cors({
 
 app.use(express.static('public'));
 
-// PeerJS Server
+// PeerJS Server Configuration
 const peerServer = ExpressPeerServer(server, {
   debug: true,
   path: '/',
-  proxied: true
+  proxied: true,
+  generateClientId: () => uuidv4()
 });
 app.use('/peerjs', peerServer);
 
-// Socket.IO Server with WebSocket fixes
+// Socket.IO Server Configuration
 const io = new Server(server, {
   cors: {
     origin: '*',
@@ -42,32 +43,44 @@ const io = new Server(server, {
 });
 
 // Store active connections
-const users = new Map(); // userId -> socketId
-const peers = new Map(); // userId -> peerId
-const rooms = new Map(); // roomId -> { users: [userId1, userId2], sockets: [socketId1, socketId2] }
+const activeUsers = new Map();  // userId -> socketId
+const activePeers = new Map();  // userId -> peerId
+const activeRooms = new Map();  // roomId -> { users: [userId1, userId2], sockets: [socketId1, socketId2] }
 
+// Helper function to check if user is in a call
+function isUserInCall(userId) {
+  const socketId = activeUsers.get(userId);
+  if (!socketId) return false;
+  
+  return [...activeRooms.values()].some(room => 
+    room.sockets.includes(socketId)
+  );
+}
+
+// Socket.IO Connection Handler
 io.on('connection', (socket) => {
   console.log('New connection:', socket.id);
 
   // Register user
   socket.on('register', (userId) => {
-    users.set(userId, socket.id);
+    activeUsers.set(userId, socket.id);
     socket.userId = userId;
+    socket.emit('registered', userId);
     console.log(`User ${userId} registered`);
   });
 
   // Register peer ID
   socket.on('register-peer', (peerId) => {
     if (socket.userId) {
-      peers.set(socket.userId, peerId);
+      activePeers.set(socket.userId, peerId);
       console.log(`Peer registered: ${socket.userId} -> ${peerId}`);
     }
   });
 
   // Random call request
   socket.on('requestRandomCall', () => {
-    const availableUsers = [...users.entries()]
-      .filter(([id, sid]) => sid !== socket.id && !rooms.has(id));
+    const availableUsers = [...activeUsers.entries()]
+      .filter(([id, sid]) => sid !== socket.id && !isUserInCall(id));
     
     if (availableUsers.length === 0) {
       return socket.emit('noUsersAvailable');
@@ -78,40 +91,51 @@ io.on('connection', (socket) => {
     ];
     const roomId = `room_${uuidv4()}`;
     
-    rooms.set(roomId, {
+    activeRooms.set(roomId, {
       users: [socket.userId, targetUserId],
       sockets: [socket.id, targetSocketId]
     });
 
+    // Notify both users
     io.to(socket.id).emit('randomCallMatched', {
       roomId,
       peerId: targetUserId,
-      targetPeerId: peers.get(targetUserId)
+      targetPeerId: activePeers.get(targetUserId)
     });
 
     io.to(targetSocketId).emit('incomingCall', {
       roomId,
       peerId: socket.userId,
-      callerPeerId: peers.get(socket.userId)
+      callerPeerId: activePeers.get(socket.userId)
     });
   });
 
   // Call acceptance
   socket.on('acceptCall', (roomId) => {
-    const room = rooms.get(roomId);
+    const room = activeRooms.get(roomId);
     if (!room) return;
 
     const [callerSocketId] = room.sockets;
     io.to(callerSocketId).emit('callAccepted', {
       roomId,
       peerId: socket.userId,
-      targetPeerId: peers.get(socket.userId)
+      targetPeerId: activePeers.get(socket.userId)
     });
+  });
+
+  // Call rejection
+  socket.on('rejectCall', (roomId) => {
+    const room = activeRooms.get(roomId);
+    if (!room) return;
+
+    const [callerSocketId] = room.sockets;
+    io.to(callerSocketId).emit('callRejected');
+    activeRooms.delete(roomId);
   });
 
   // WebRTC signaling
   socket.on('signal', ({ targetUserId, signal }) => {
-    const targetSocketId = users.get(targetUserId);
+    const targetSocketId = activeUsers.get(targetUserId);
     if (targetSocketId) {
       io.to(targetSocketId).emit('signal', {
         peerId: socket.userId,
@@ -125,25 +149,38 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
     
     if (socket.userId) {
-      users.delete(socket.userId);
-      peers.delete(socket.userId);
+      activeUsers.delete(socket.userId);
+      activePeers.delete(socket.userId);
 
       // Clean up rooms
-      for (const [roomId, room] of rooms.entries()) {
+      for (const [roomId, room] of activeRooms.entries()) {
         if (room.sockets.includes(socket.id)) {
           room.sockets.forEach(sid => {
             if (sid !== socket.id) {
               io.to(sid).emit('peerDisconnected');
             }
           });
-          rooms.delete(roomId);
+          activeRooms.delete(roomId);
         }
       }
     }
   });
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    users: activeUsers.size,
+    peers: activePeers.size,
+    rooms: activeRooms.size,
+    websockets: true
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`WebSocket endpoint: ws://localhost:${PORT}/socket.io/`);
+  console.log(`PeerJS endpoint: http://localhost:${PORT}/peerjs`);
 });
