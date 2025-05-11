@@ -1,3 +1,46 @@
+// Enhanced Socket.IO client with WebSocket fixes
+let socket;
+
+function connectSocket() {
+  socket = io('https://live-production-cf6e.up.railway.app', {
+    path: '/socket.io/',
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    timeout: 20000,
+    autoConnect: true,
+    withCredentials: false,
+    upgrade: false,
+    rememberUpgrade: true
+  });
+
+  socket.on('connect', () => {
+    console.log('Connected with transport:', socket.io.engine.transport.name);
+    registerUser();
+  });
+
+  socket.on('connect_error', (error) => {
+    console.error('Connection error:', error.message);
+    
+    // Fallback to polling after 3 seconds
+    setTimeout(() => {
+      socket.io.opts.transports = ['polling', 'websocket'];
+      socket.io.opts.upgrade = true;
+      socket.connect();
+    }, 3000);
+  });
+
+  socket.on('reconnect_attempt', (attempt) => {
+    console.log(`Reconnection attempt ${attempt}`);
+  });
+
+  socket.on('reconnect_failed', () => {
+    console.error('Reconnection failed');
+    showToast('Connection to server lost. Please refresh the page.');
+  });
+}
+
 // DOM Elements
 const userIdDisplay = document.getElementById('userIdDisplay');
 const userIdElement = document.getElementById('userId');
@@ -22,34 +65,6 @@ let myUserId = localStorage.getItem('userId') || `user_${Math.random().toString(
 localStorage.setItem('userId', myUserId);
 userIdDisplay.classList.remove('hidden');
 userIdElement.textContent = myUserId;
-
-// Socket.IO Client
-const socket = io('https://live-production-cf6e.up.railway.app', {
-  path: '/socket.io/',
-  transports: ['websocket'],
-  reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000,
-  timeout: 20000
-});
-
-// Socket.IO Events
-socket.on('connect', () => {
-  console.log('Connected to server');
-  socket.emit('register', myUserId);
-});
-
-socket.on('connect_error', (err) => {
-  console.error('Connection error:', err);
-  setTimeout(() => socket.connect(), 3000);
-});
-
-socket.on('disconnect', (reason) => {
-  console.log('Disconnected:', reason);
-  if (reason === 'io server disconnect') {
-    socket.connect();
-  }
-});
 
 // Initialize PeerJS
 function initializePeer() {
@@ -189,7 +204,7 @@ function endCall() {
 
 // Video Stream Management
 function addVideoStream(stream, peerId) {
-  removeVideoStream(peerId); // Remove existing if any
+  removeVideoStream(peerId);
 
   const videoContainer = document.createElement('div');
   videoContainer.className = 'video-container';
@@ -292,69 +307,60 @@ function copyUserId() {
   showToast('User ID copied');
 }
 
-// Event Listeners
-document.getElementById('startRandomCall').addEventListener('click', startRandomCall);
-document.getElementById('startDirectCall').addEventListener('click', startDirectCall);
-document.getElementById('createGroupCall').addEventListener('click', createGroupCall);
-document.getElementById('acceptCall').addEventListener('click', acceptCall);
-document.getElementById('rejectCall').addEventListener('click', rejectCall);
-document.getElementById('endCall').addEventListener('click', endCall);
-document.getElementById('toggleMute').addEventListener('click', toggleMute);
-document.getElementById('toggleVideo').addEventListener('click', toggleVideo);
-document.getElementById('copyUserId').addEventListener('click', copyUserId);
-
 // Socket.IO Event Handlers
-socket.on('incomingCall', ({ roomId, peerId }) => {
-  currentRoomId = roomId;
-  callerIdElement.textContent = `Incoming call from ${peerId}`;
-  showIncomingCallModal();
-});
+function setupSocketEvents() {
+  socket.on('incomingCall', ({ roomId, peerId }) => {
+    currentRoomId = roomId;
+    callerIdElement.textContent = `Incoming call from ${peerId}`;
+    showIncomingCallModal();
+  });
 
-socket.on('callAccepted', ({ peerId, targetPeerId }) => {
-  hideLoading();
-  showCallInterface();
-  connectToPeer(targetPeerId);
-});
+  socket.on('callAccepted', ({ peerId, targetPeerId }) => {
+    hideLoading();
+    showCallInterface();
+    connectToPeer(targetPeerId);
+  });
 
-socket.on('callRejected', () => {
-  hideLoading();
-  showToast('Call rejected');
-  endCall();
-});
+  socket.on('callRejected', () => {
+    hideLoading();
+    showToast('Call rejected');
+    endCall();
+  });
 
-socket.on('userNotAvailable', () => {
-  hideLoading();
-  showToast('User not available');
-});
+  socket.on('userNotAvailable', () => {
+    hideLoading();
+    showToast('User not available');
+  });
 
-socket.on('userInCall', () => {
-  hideLoading();
-  showToast('User is in another call');
-});
+  socket.on('userInCall', () => {
+    hideLoading();
+    showToast('User is in another call');
+  });
 
-socket.on('noUsersAvailable', () => {
-  hideLoading();
-  showToast('No users available');
-});
+  socket.on('noUsersAvailable', () => {
+    hideLoading();
+    showToast('No users available');
+  });
 
-socket.on('groupCallCreated', ({ roomId }) => {
-  currentRoomId = roomId;
-  hideLoading();
-  showCallInterface();
-  const joinLink = `${window.location.origin}?room=${roomId}`;
-  showToast(`Group call created! Share: ${joinLink}`);
-});
+  socket.on('groupCallCreated', ({ roomId }) => {
+    currentRoomId = roomId;
+    hideLoading();
+    showCallInterface();
+    const joinLink = `${window.location.origin}?room=${roomId}`;
+    showToast(`Group call created! Share: ${joinLink}`);
+  });
 
-socket.on('newUserJoined', ({ newPeerId }) => {
-  if (peer && newPeerId) {
-    connectToPeer(newPeerId);
-  }
-});
+  socket.on('newUserJoined', ({ newPeerId }) => {
+    if (peer && newPeerId) {
+      connectToPeer(newPeerId);
+    }
+  });
 
-socket.on('peerDisconnected', ({ peerId }) => {
-  showToast(`${peerId} disconnected`);
-  removeVideoStream(peerId);
-});
+  socket.on('peerDisconnected', ({ peerId }) => {
+    showToast(`${peerId} disconnected`);
+    removeVideoStream(peerId);
+  });
+}
 
 // Peer Connection
 function connectToPeer(peerId) {
@@ -369,8 +375,15 @@ function connectToPeer(peerId) {
   });
 }
 
+// User registration
+function registerUser() {
+  socket.emit('register', myUserId);
+}
+
 // Initialize on load
 window.addEventListener('load', () => {
+  connectSocket();
+  setupSocketEvents();
   initializePeer();
   
   const urlParams = new URLSearchParams(window.location.search);
@@ -380,3 +393,14 @@ window.addEventListener('load', () => {
     socket.emit('joinGroupCall', roomId);
   }
 });
+
+// Event Listeners
+document.getElementById('startRandomCall').addEventListener('click', startRandomCall);
+document.getElementById('startDirectCall').addEventListener('click', startDirectCall);
+document.getElementById('createGroupCall').addEventListener('click', createGroupCall);
+document.getElementById('acceptCall').addEventListener('click', acceptCall);
+document.getElementById('rejectCall').addEventListener('click', rejectCall);
+document.getElementById('endCall').addEventListener('click', endCall);
+document.getElementById('toggleMute').addEventListener('click', toggleMute);
+document.getElementById('toggleVideo').addEventListener('click', toggleVideo);
+document.getElementById('copyUserId').addEventListener('click', copyUserId);
