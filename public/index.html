@@ -1,74 +1,104 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>دردشة بالفيديو</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Chat App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <div id="app">
-    <!-- الصفحة الرئيسية -->
-    <div id="mainPage" class="page">
-      <h1 class="logo animate__animated animate__pulse">دردشة بالفيديو</h1>
-      
-      <div class="action-buttons">
-        <button id="createGroupBtn" class="btn btn-primary">
-          <i class="fas fa-users"></i> إنشاء مكالمة جماعية
-        </button>
-        
-        <button id="randomCallBtn" class="btn btn-success">
-          <i class="fas fa-random"></i> مكالمة عشوائية
-        </button>
-        
-        <div class="private-call">
-          <input type="text" id="targetUserId" placeholder="أدخل معرف المستخدم">
-          <button id="privateCallBtn" class="btn btn-purple">
-            <i class="fas fa-phone"></i> اتصال خاص
-          </button>
+<body class="bg-gray-100 min-h-screen">
+    <div id="app" class="container mx-auto px-4 py-8">
+        <!-- User ID Display -->
+        <div id="userIdDisplay" class="mb-8 p-4 bg-white rounded-lg shadow-md hidden">
+            <h2 class="text-xl font-semibold mb-2">Your ID:</h2>
+            <div class="flex items-center space-x-2">
+                <span id="userId" class="text-gray-700"></span>
+                <button onclick="copyUserId()" class="p-2 text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
         </div>
-      </div>
+
+        <!-- Main Menu -->
+        <div id="mainMenu" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Random Call -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Random Call</h2>
+                <button onclick="startRandomCall()" class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">
+                    Start Random Call
+                </button>
+            </div>
+
+            <!-- Direct Call -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Direct Call</h2>
+                <div class="space-y-4">
+                    <input type="text" id="targetUserId" placeholder="Enter user ID" 
+                           class="w-full p-2 border rounded">
+                    <button onclick="startDirectCall()" class="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700">
+                        Call User
+                    </button>
+                </div>
+            </div>
+
+            <!-- Group Call -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Group Call</h2>
+                <button onclick="createGroupCall()" class="w-full bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700">
+                    Create Group Call
+                </button>
+            </div>
+        </div>
+
+        <!-- Call Interface -->
+        <div id="callInterface" class="hidden">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="relative">
+                        <video id="localVideo" autoplay muted playsinline class="w-full rounded"></video>
+                        <div class="absolute bottom-4 left-4 flex space-x-2">
+                            <button onclick="toggleMute()" class="p-2 bg-gray-800 text-white rounded-full hover:bg-gray-700">
+                                <i class="fas fa-microphone"></i>
+                            </button>
+                            <button onclick="toggleVideo()" class="p-2 bg-gray-800 text-white rounded-full hover:bg-gray-700">
+                                <i class="fas fa-video"></i>
+                            </button>
+                            <button onclick="endCall()" class="p-2 bg-red-600 text-white rounded-full hover:bg-red-700">
+                                <i class="fas fa-phone-slash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="remoteVideos" class="grid grid-cols-2 gap-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Incoming Call Modal -->
+        <div id="incomingCallModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <div class="bg-white p-6 rounded-lg shadow-xl">
+                <h2 class="text-xl font-semibold mb-4">Incoming Call</h2>
+                <p id="callerId" class="mb-4"></p>
+                <div class="flex space-x-4">
+                    <button onclick="acceptCall()" class="bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700">
+                        Accept
+                    </button>
+                    <button onclick="rejectCall()" class="bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700">
+                        Reject
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Animation -->
+        <div id="loadingAnimation" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <div class="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
     </div>
 
-    <!-- صفحة الانتظار -->
-    <div id="waitingPage" class="page hidden">
-      <div class="waiting-content animate__animated animate__pulse">
-        <i class="fas fa-video fa-4x"></i>
-        <p>جارٍ البحث عن مستخدم...</p>
-        <button id="cancelSearchBtn" class="btn btn-danger">
-          <i class="fas fa-times"></i> إلغاء
-        </button>
-      </div>
-    </div>
-
-    <!-- صفحة المكالمة -->
-    <div id="callPage" class="page hidden">
-      <div id="videoContainer" class="video-container"></div>
-      
-      <div class="call-controls">
-        <button id="muteBtn" class="control-btn" title="كتم الصوت">
-          <i class="fas fa-microphone"></i>
-        </button>
-        
-        <button id="videoBtn" class="control-btn" title="إيقاف الفيديو">
-          <i class="fas fa-video"></i>
-        </button>
-        
-        <button id="endCallBtn" class="control-btn btn-danger" title="إنهاء المكالمة">
-          <i class="fas fa-phone-slash"></i>
-        </button>
-        
-        <button id="copyLinkBtn" class="control-btn" title="نسخ الرابط">
-          <i class="fas fa-copy"></i>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
-  <script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
-</html>
+</html> 
