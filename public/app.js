@@ -102,7 +102,7 @@ async function initializeMedia() {
 // Initialize PeerJS
 function initializePeer() {
     try {
-        peer = new Peer({
+               peer = new Peer(`peer_${myUserId}`, {
             host: 'live-production-cf6e.up.railway.app',
             port: 443,
             path: '/peerjs',
@@ -111,14 +111,15 @@ function initializePeer() {
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:global.stun.twilio.com:3478' }
                 ]
             }
         });
 
         peer.on('open', (id) => {
             console.log('PeerJS connected with ID:', id);
+            // Register the peer ID with your Socket.IO server
+            socket.emit('register-peer', id);
         });
 
         peer.on('error', (error) => {
@@ -153,6 +154,7 @@ function initializePeer() {
 
     } catch (error) {
         console.error('PeerJS initialization failed:', error);
+        showToast('Connection error. Retrying...');
         setTimeout(initializePeer, 3000);
     }
 }
