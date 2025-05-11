@@ -28,12 +28,8 @@ app.use(express.static('public'));
 // Create PeerJS server with proper configuration
 const peerServer = ExpressPeerServer(http, {
     debug: true,
-    path: '/peerjs',
+    path: '/',
     proxied: true,
-    ssl: {
-        key: process.env.SSL_KEY,
-        cert: process.env.SSL_CERT
-    },
     allow_discovery: true,
     generateClientId: () => uuidv4()
 });
