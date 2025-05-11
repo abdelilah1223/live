@@ -10,7 +10,12 @@ const io = require('socket.io')(http, {
     transports: ['polling', 'websocket'],
     allowEIO3: true,
     pingTimeout: 60000,
-    pingInterval: 25000
+    pingInterval: 25000,
+    upgradeTimeout: 30000,
+    allowUpgrades: true,
+    perMessageDeflate: {
+        threshold: 2048
+    }
 });
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
