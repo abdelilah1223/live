@@ -50,9 +50,10 @@ async function initializeMedia() {
 // Initialize PeerJS
 function initializePeer() {
     peer = new Peer(undefined, {
-        host: window.location.hostname,
-        port: 3000,
-        path: '/peerjs'
+        host: 'live-production-71ed.up.railway.app',
+        port: 443,
+        path: '/peerjs',
+        secure: true
     });
 
     peer.on('open', (id) => {
