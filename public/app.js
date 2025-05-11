@@ -1,5 +1,5 @@
 // Initialize Socket.IO connection
-const socket = io('http://localhost:3000');
+const socket = io('https://live-git-main-abdelilah1223s-projects.vercel.app');
 
 // Initialize PeerJS
 let peer = null;
