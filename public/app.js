@@ -1,5 +1,5 @@
 // Initialize Socket.IO connection
-const socket = io('https://live-production-71ed.up.railway.app');
+const socket = io('https://live-production-cf6e.up.railway.app');
 
 // Initialize PeerJS
 let peer = null;
@@ -50,7 +50,7 @@ async function initializeMedia() {
 // Initialize PeerJS
 function initializePeer() {
     peer = new Peer(undefined, {
-        host: 'live-production-71ed.up.railway.app',
+        host: 'live-production-cf6e.up.railway.app',
         port: 443,
         path: '/peerjs',
         secure: true
