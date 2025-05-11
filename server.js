@@ -8,7 +8,7 @@ const io = require('socket.io')(http, {
         credentials: true,
         allowedHeaders: ["*"]
     },
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     allowEIO3: true,
     pingTimeout: 60000,
     pingInterval: 25000,
@@ -20,7 +20,13 @@ const io = require('socket.io')(http, {
     maxHttpBufferSize: 1e8,
     path: '/socket.io/',
     serveClient: false,
-    cookie: false
+    cookie: false,
+    connectTimeout: 45000,
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        credentials: true
+    }
 });
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
@@ -168,6 +174,15 @@ function isUserInCall(userId) {
     }
     return false;
 }
+
+// Add health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
 
 // Update the port to use environment variable
 const PORT = process.env.PORT || 3000;
