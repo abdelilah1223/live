@@ -49,10 +49,13 @@ async function initializeMedia() {
 
 // Initialize PeerJS
 function initializePeer() {
-    peer = new Peer(undefined, {
-        host: '/',
-        port: '3001'
-    });
+peer = new Peer(undefined, {
+  host: 'http://live-production-71ed.up.railway.app', 
+  port: 3000,
+  path: '/',
+  secure: true
+});
+
 
     peer.on('open', (id) => {
         console.log('PeerJS connected with ID:', id);
@@ -258,7 +261,7 @@ function showToast(message) {
     
     setTimeout(() => {
         toast.remove();
-    }, 3000);
+    }, 9000);
 }
 
 // Handle URL parameters for joining calls
