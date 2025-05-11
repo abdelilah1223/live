@@ -1,6 +1,6 @@
 // Initialize Socket.IO connection with proper configuration
 const socket = io('https://live-production-cf6e.up.railway.app', {
-    transports: ['polling', 'websocket'],
+    transports: ['websocket', 'polling'],
     secure: true,
     rejectUnauthorized: false,
     path: '/socket.io/',
@@ -9,7 +9,23 @@ const socket = io('https://live-production-cf6e.up.railway.app', {
     reconnectionDelay: 1000,
     timeout: 20000,
     forceNew: true,
-    autoConnect: true
+    autoConnect: true,
+    upgrade: true,
+    rememberUpgrade: true,
+    withCredentials: false
+});
+
+// Add connection event handlers
+socket.on('connect', () => {
+    console.log('Socket.IO connected successfully');
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Socket.IO connection error:', error);
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('Socket.IO disconnected:', reason);
 });
 
 // Initialize PeerJS
