@@ -1,6 +1,30 @@
-// Enhanced Socket.IO client with WebSocket fixes
-let socket;
+// DOM Elements
+const userIdDisplay = document.getElementById('userIdDisplay');
+const userIdElement = document.getElementById('userId');
+const mainMenu = document.getElementById('mainMenu');
+const callInterface = document.getElementById('callInterface');
+const localVideo = document.getElementById('localVideo');
+const remoteVideos = document.getElementById('remoteVideos');
+const incomingCallModal = document.getElementById('incomingCallModal');
+const callerIdElement = document.getElementById('callerId');
+const loadingAnimation = document.getElementById('loadingAnimation');
+const targetUserIdInput = document.getElementById('targetUserId');
 
+// State
+let socket;
+let peer;
+let localStream;
+let currentRoomId;
+let isMuted = false;
+let isVideoEnabled = true;
+let myUserId = localStorage.getItem('userId') || `user_${Math.random().toString(36).substr(2, 9)}`;
+
+// Initialize user ID
+localStorage.setItem('userId', myUserId);
+userIdDisplay.classList.remove('hidden');
+userIdElement.textContent = myUserId;
+
+// Initialize Socket.IO connection
 function connectSocket() {
   socket = io('https://live-production-cf6e.up.railway.app', {
     path: '/socket.io/',
@@ -9,10 +33,7 @@ function connectSocket() {
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     timeout: 20000,
-    autoConnect: true,
-    withCredentials: false,
-    upgrade: false,
-    rememberUpgrade: true
+    upgrade: false
   });
 
   socket.on('connect', () => {
@@ -41,31 +62,6 @@ function connectSocket() {
   });
 }
 
-// DOM Elements
-const userIdDisplay = document.getElementById('userIdDisplay');
-const userIdElement = document.getElementById('userId');
-const mainMenu = document.getElementById('mainMenu');
-const callInterface = document.getElementById('callInterface');
-const localVideo = document.getElementById('localVideo');
-const remoteVideos = document.getElementById('remoteVideos');
-const incomingCallModal = document.getElementById('incomingCallModal');
-const callerIdElement = document.getElementById('callerId');
-const loadingAnimation = document.getElementById('loadingAnimation');
-const targetUserIdInput = document.getElementById('targetUserId');
-
-// State
-let peer;
-let localStream;
-let currentRoomId;
-let isMuted = false;
-let isVideoEnabled = true;
-let myUserId = localStorage.getItem('userId') || `user_${Math.random().toString(36).substr(2, 9)}`;
-
-// Initialize user ID
-localStorage.setItem('userId', myUserId);
-userIdDisplay.classList.remove('hidden');
-userIdElement.textContent = myUserId;
-
 // Initialize PeerJS
 function initializePeer() {
   try {
@@ -78,7 +74,8 @@ function initializePeer() {
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:global.stun.twilio.com:3478' }
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
         ]
       }
     });
@@ -98,9 +95,11 @@ function initializePeer() {
     });
 
     peer.on('call', (call) => {
+      console.log('Incoming call from:', call.peer);
       if (localStream) {
         call.answer(localStream);
         call.on('stream', (remoteStream) => {
+          console.log('Received remote stream from:', call.peer);
           addVideoStream(remoteStream, call.peer);
         });
         call.on('close', () => {
@@ -360,17 +359,28 @@ function setupSocketEvents() {
     showToast(`${peerId} disconnected`);
     removeVideoStream(peerId);
   });
+
+  socket.on('signal', ({ peerId, signal }) => {
+    if (peer && peerId) {
+      peer.signal(signal);
+    }
+  });
 }
 
 // Peer Connection
 function connectToPeer(peerId) {
   if (!peer || !localStream || !peerId) return;
 
+  console.log('Calling peer:', peerId);
   const call = peer.call(peerId, localStream);
+  
   call.on('stream', (remoteStream) => {
+    console.log('Received remote stream from call:', peerId);
     addVideoStream(remoteStream, peerId);
   });
+  
   call.on('close', () => {
+    console.log('Call closed with:', peerId);
     removeVideoStream(peerId);
   });
 }
