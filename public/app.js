@@ -1,18 +1,11 @@
-// Initialize Socket.IO connection with proper configuration
+// Initialize Socket.IO connection
 const socket = io('https://live-production-cf6e.up.railway.app', {
-    transports: ['websocket', 'polling'],
-    secure: true,
-    rejectUnauthorized: false,
     path: '/socket.io/',
+    transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
-    timeout: 20000,
-    forceNew: true,
-    autoConnect: true,
-    upgrade: true,
-    rememberUpgrade: true,
-    withCredentials: false
+    timeout: 20000
 });
 
 // Add connection event handlers
@@ -22,11 +15,41 @@ socket.on('connect', () => {
 
 socket.on('connect_error', (error) => {
     console.error('Socket.IO connection error:', error);
+    setTimeout(() => {
+        if (!socket.connected) {
+            socket.connect();
+        }
+    }, 3000);
 });
 
 socket.on('disconnect', (reason) => {
     console.log('Socket.IO disconnected:', reason);
+    if (reason === 'io server disconnect') {
+        socket.connect();
+    }
 });
+
+// Setup reconnection logic
+function setupSocketReconnect() {
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    
+    socket.on('reconnect_attempt', () => {
+        reconnectAttempts++;
+        if (reconnectAttempts > maxReconnectAttempts) {
+            showToast('Unable to connect to server. Please refresh the page.');
+        }
+    });
+    
+    socket.on('reconnect', () => {
+        reconnectAttempts = 0;
+        showToast('Reconnected to server');
+        if (myUserId) {
+            socket.emit('register', myUserId);
+        }
+    });
+}
+setupSocketReconnect();
 
 // Initialize PeerJS
 let peer = null;
@@ -46,7 +69,7 @@ const incomingCallModal = document.getElementById('incomingCallModal');
 const callerId = document.getElementById('callerId');
 const loadingAnimation = document.getElementById('loadingAnimation');
 
-// Initialize user ID from localStorage or generate new one
+// Initialize user ID
 let myUserId = localStorage.getItem('userId');
 if (!myUserId) {
     myUserId = 'user_' + Math.random().toString(36).substr(2, 9);
@@ -68,75 +91,77 @@ async function initializeMedia() {
             audio: true
         });
         localVideo.srcObject = localStream;
+        return true;
     } catch (error) {
         console.error('Error accessing media devices:', error);
-        showToast('Error accessing camera and microphone');
+        showToast('Error accessing camera and microphone: ' + error.message);
+        return false;
     }
 }
 
-// Initialize PeerJS with proper configuration
+// Initialize PeerJS
 function initializePeer() {
-    peer = new Peer(undefined, {
-        host: 'live-production-cf6e.up.railway.app',
-        port: 443,
-        path: '/peerjs',
-        secure: true,
-        debug: 3,
-        config: {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' }
-            ]
-        },
-        sdpSemantics: 'unified-plan',
-        allow_discovery: true,
-        reconnectTimer: 3000,
-        maxRetries: 5
-    });
-
-    peer.on('open', (id) => {
-        console.log('PeerJS connected with ID:', id);
-    });
-
-    peer.on('error', (error) => {
-        console.error('PeerJS error:', error);
-        showToast('Connection error occurred');
-        // Attempt to reconnect
-        setTimeout(() => {
-            if (peer && peer.disconnected) {
-                initializePeer();
+    try {
+        peer = new Peer({
+            host: 'live-production-cf6e.up.railway.app',
+            port: 443,
+            path: '/peerjs',
+            secure: true,
+            debug: 3,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:global.stun.twilio.com:3478' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
             }
-        }, 3000);
-    });
+        });
 
-    // Handle incoming calls
-    peer.on('call', (call) => {
-        if (localStream) {
-            call.answer(localStream);
-            call.on('stream', (remoteStream) => {
-                addVideoStream(remoteStream, call.peer);
-            });
-        }
-    });
+        peer.on('open', (id) => {
+            console.log('PeerJS connected with ID:', id);
+        });
 
-    // Handle disconnection
-    peer.on('disconnected', () => {
-        console.log('PeerJS disconnected');
-        showToast('Connection lost. Attempting to reconnect...');
-        setTimeout(() => {
-            if (peer && peer.disconnected) {
-                initializePeer();
+        peer.on('error', (error) => {
+            console.error('PeerJS error:', error);
+            if (error.type === 'peer-unavailable') {
+                showToast('Peer is not available');
+            } else if (error.type === 'unavailable-id') {
+                setTimeout(initializePeer, 3000);
+            } else {
+                showToast('Connection error occurred');
+                setTimeout(initializePeer, 3000);
             }
-        }, 3000);
-    });
+        });
+
+        peer.on('call', (call) => {
+            if (localStream) {
+                call.answer(localStream);
+                call.on('stream', (remoteStream) => {
+                    addVideoStream(remoteStream, call.peer);
+                });
+                call.on('close', () => {
+                    removeVideoStream(call.peer);
+                });
+            }
+        });
+
+        peer.on('disconnected', () => {
+            console.log('PeerJS disconnected');
+            showToast('Connection lost. Reconnecting...');
+            setTimeout(initializePeer, 3000);
+        });
+
+    } catch (error) {
+        console.error('PeerJS initialization failed:', error);
+        setTimeout(initializePeer, 3000);
+    }
 }
 
 // Start random call
 async function startRandomCall() {
-    await initializeMedia();
+    const mediaSuccess = await initializeMedia();
+    if (!mediaSuccess) return;
+    
     initializePeer();
     showLoading();
     socket.emit('requestRandomCall');
@@ -144,13 +169,15 @@ async function startRandomCall() {
 
 // Start direct call
 async function startDirectCall() {
-    const targetUserId = document.getElementById('targetUserId').value;
+    const targetUserId = document.getElementById('targetUserId').value.trim();
     if (!targetUserId) {
         showToast('Please enter a user ID');
         return;
     }
 
-    await initializeMedia();
+    const mediaSuccess = await initializeMedia();
+    if (!mediaSuccess) return;
+    
     initializePeer();
     showLoading();
     socket.emit('requestDirectCall', targetUserId);
@@ -158,7 +185,9 @@ async function startDirectCall() {
 
 // Create group call
 async function createGroupCall() {
-    await initializeMedia();
+    const mediaSuccess = await initializeMedia();
+    if (!mediaSuccess) return;
+    
     initializePeer();
     showLoading();
     socket.emit('createGroupCall');
@@ -173,7 +202,12 @@ socket.on('incomingCall', ({ roomId, peerId }) => {
 
 // Accept call
 async function acceptCall() {
-    await initializeMedia();
+    const mediaSuccess = await initializeMedia();
+    if (!mediaSuccess) {
+        rejectCall();
+        return;
+    }
+    
     initializePeer();
     incomingCallModal.classList.add('hidden');
     showCallInterface();
@@ -189,6 +223,7 @@ function rejectCall() {
 
 // Handle call accepted
 socket.on('callAccepted', ({ roomId, peerId }) => {
+    if (roomId !== currentRoomId) return;
     hideLoading();
     showCallInterface();
     connectToPeer(peerId);
@@ -228,18 +263,34 @@ socket.on('groupCallCreated', ({ roomId }) => {
     showToast('Group call created! Share this link: ' + joinLink);
 });
 
+// Handle new user joined group call
+socket.on('newUserJoined', ({ peerId }) => {
+    if (peer && peerId !== myUserId) {
+        connectToPeer(peerId);
+    }
+});
+
 // Connect to peer
 function connectToPeer(peerId) {
+    if (!peer || !localStream) return;
+    
     const call = peer.call(peerId, localStream);
     call.on('stream', (remoteStream) => {
         addVideoStream(remoteStream, peerId);
+    });
+    call.on('close', () => {
+        removeVideoStream(peerId);
     });
 }
 
 // Add video stream
 function addVideoStream(stream, peerId) {
+    // Remove existing stream if any
+    removeVideoStream(peerId);
+    
     const videoContainer = document.createElement('div');
     videoContainer.className = 'video-container';
+    videoContainer.id = `video-${peerId}`;
     
     const video = document.createElement('video');
     video.srcObject = stream;
@@ -247,12 +298,20 @@ function addVideoStream(stream, peerId) {
     video.playsInline = true;
     
     const peerLabel = document.createElement('div');
-    peerLabel.className = 'absolute top-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded';
+    peerLabel.className = 'peer-label';
     peerLabel.textContent = peerId;
     
     videoContainer.appendChild(video);
     videoContainer.appendChild(peerLabel);
     remoteVideos.appendChild(videoContainer);
+}
+
+// Remove video stream
+function removeVideoStream(peerId) {
+    const existingVideo = document.getElementById(`video-${peerId}`);
+    if (existingVideo) {
+        existingVideo.remove();
+    }
 }
 
 // Toggle mute
@@ -264,6 +323,7 @@ function toggleMute() {
         });
         const muteButton = document.querySelector('.fa-microphone');
         muteButton.classList.toggle('fa-microphone-slash');
+        showToast(isMuted ? 'Microphone muted' : 'Microphone unmuted');
     }
 }
 
@@ -276,6 +336,7 @@ function toggleVideo() {
         });
         const videoButton = document.querySelector('.fa-video');
         videoButton.classList.toggle('fa-video-slash');
+        showToast(isVideoEnabled ? 'Video enabled' : 'Video disabled');
     }
 }
 
@@ -283,9 +344,11 @@ function toggleVideo() {
 function endCall() {
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
     }
     if (peer) {
         peer.destroy();
+        peer = null;
     }
     currentRoomId = null;
     hideCallInterface();
@@ -326,7 +389,6 @@ function showCallInterface() {
 
 function hideCallInterface() {
     callInterface.classList.add('hidden');
-    mainMenu.classList.remove('hidden');
 }
 
 // Show toast notification
@@ -348,12 +410,13 @@ window.addEventListener('load', () => {
     const callType = urlParams.get('type');
     
     if (roomId && callType === 'group') {
+        showLoading();
         socket.emit('joinGroupCall', roomId);
     }
 });
 
 // Handle peer disconnection
-socket.on('peerDisconnected', () => {
-    showToast('Peer disconnected');
-    endCall();
-}); 
+socket.on('peerDisconnected', ({ peerId }) => {
+    showToast(`${peerId} disconnected`);
+    removeVideoStream(peerId);
+});
