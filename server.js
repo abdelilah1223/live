@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { ExpressPeerServer } = require('peer');
 const cors = require('cors');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,7 +19,7 @@ app.use(cors({
 
 app.use(express.static('public'));
 
-// PeerJS Server with correct path
+// PeerJS Server
 const peerServer = ExpressPeerServer(server, {
   debug: true,
   path: '/',
@@ -40,16 +41,10 @@ const io = new Server(server, {
   pingInterval: 25000
 });
 
-// Trust proxy for Railway
-app.set('trust proxy', true);
-
 // Store active connections
 const users = new Map(); // userId -> socketId
 const peers = new Map(); // userId -> peerId
 const rooms = new Map(); // roomId -> { users: [userId1, userId2], sockets: [socketId1, socketId2] }
-
-// Helper function
-const getUserSocket = (userId) => users.get(userId);
 
 io.on('connection', (socket) => {
   console.log('New connection:', socket.id);
@@ -88,7 +83,6 @@ io.on('connection', (socket) => {
       sockets: [socket.id, targetSocketId]
     });
 
-    // Notify both users
     io.to(socket.id).emit('randomCallMatched', {
       roomId,
       peerId: targetUserId,
@@ -107,24 +101,12 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
 
-    const [callerUserId, targetUserId] = room.users;
-    const callerSocketId = users.get(callerUserId);
-    
+    const [callerSocketId] = room.sockets;
     io.to(callerSocketId).emit('callAccepted', {
       roomId,
       peerId: socket.userId,
       targetPeerId: peers.get(socket.userId)
     });
-  });
-
-  // Call rejection
-  socket.on('rejectCall', (roomId) => {
-    const room = rooms.get(roomId);
-    if (!room) return;
-
-    const [callerSocketId] = room.sockets;
-    io.to(callerSocketId).emit('callRejected');
-    rooms.delete(roomId);
   });
 
   // WebRTC signaling
@@ -161,20 +143,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    users: users.size,
-    peers: peers.size,
-    rooms: rooms.size,
-    websockets: true
-  });
-});
-
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`WebSocket endpoint: ws://localhost:${PORT}/socket.io/`);
-  console.log(`PeerJS endpoint: http://localhost:${PORT}/peerjs`);
 });
