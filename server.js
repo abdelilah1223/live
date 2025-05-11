@@ -9,15 +9,17 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const server = http.createServer(app);
 
-// Middleware
+// Enhanced CORS configuration
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST']
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true
 }));
-app.use(express.json());
+
 app.use(express.static('public'));
 
-// PeerJS Server
+// PeerJS Server with correct path
 const peerServer = ExpressPeerServer(server, {
   debug: true,
   path: '/',
@@ -26,54 +28,49 @@ const peerServer = ExpressPeerServer(server, {
 });
 app.use('/peerjs', peerServer);
 
-// Socket.IO Server
+// Socket.IO Server with WebSocket fixes
 const io = new Server(server, {
   cors: {
     origin: '*',
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST'],
+    credentials: true
   },
   path: '/socket.io/',
   transports: ['websocket', 'polling'],
   serveClient: false,
+  allowEIO3: true,
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  cookie: false
 });
 
-// Data stores
-const activeUsers = new Map();  // userId -> socketId
-const activePeers = new Map();  // userId -> peerId
-const activeRooms = new Map();  // roomId -> [socketId1, socketId2, ...]
+// Trust proxy for Railway
+app.set('trust proxy', true);
 
-// Helper functions
-const isUserInCall = (userId) => {
-  const socketId = activeUsers.get(userId);
-  if (!socketId) return false;
-  
-  return [...activeRooms.values()].some(users => users.includes(socketId));
-};
+// Store active connections
+const activeUsers = new Map();
+const activePeers = new Map();
+const activeRooms = new Map();
 
-// Socket.IO events
 io.on('connection', (socket) => {
-  console.log('New connection:', socket.id);
+  console.log('User connected:', socket.id);
 
-  // User registration
+  // Register user
   socket.on('register', (userId) => {
     activeUsers.set(userId, socket.id);
     socket.userId = userId;
     socket.emit('registered', userId);
-    console.log(`User ${userId} registered`);
   });
 
-  // Peer ID registration
+  // Register peer ID
   socket.on('register-peer', (peerId) => {
     if (socket.userId) {
       activePeers.set(socket.userId, peerId);
-      console.log(`Peer registered: ${socket.userId} -> ${peerId}`);
     }
   });
 
   // Random call request
-  socket.on('requestRandomCall', async () => {
+  socket.on('requestRandomCall', () => {
     const availableUsers = [...activeUsers.entries()]
       .filter(([id, sid]) => sid !== socket.id && !isUserInCall(id));
     
@@ -208,18 +205,27 @@ io.on('connection', (socket) => {
   });
 });
 
+function isUserInCall(userId) {
+  const socketId = activeUsers.get(userId);
+  if (!socketId) return false;
+  
+  return [...activeRooms.values()].some(users => users.includes(socketId));
+}
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     users: activeUsers.size,
     peers: activePeers.size,
-    rooms: activeRooms.size
+    rooms: activeRooms.size,
+    websockets: true
   });
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`WebSocket endpoint: /socket.io/`);
+  console.log(`PeerJS endpoint: /peerjs`);
 });
