@@ -72,7 +72,8 @@ function initializePeer() {
                 { urls: 'stun:stun4.l.google.com:19302' }
             ]
         },
-        sdpSemantics: 'unified-plan'
+        sdpSemantics: 'unified-plan',
+        allow_discovery: true
     });
 
     peer.on('open', (id) => {
