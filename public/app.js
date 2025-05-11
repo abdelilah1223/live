@@ -276,6 +276,16 @@ function hideLoading() {
     loadingAnimation.classList.add('hidden');
 }
 
+// Show/hide main menu
+function showMainMenu() {
+    mainMenu.classList.remove('hidden');
+    callInterface.classList.add('hidden');
+}
+
+function hideMainMenu() {
+    mainMenu.classList.add('hidden');
+}
+
 // Show/hide call interface
 function showCallInterface() {
     mainMenu.classList.add('hidden');
