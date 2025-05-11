@@ -1,5 +1,10 @@
-// Initialize Socket.IO connection
-const socket = io('https://live-production-cf6e.up.railway.app');
+// Initialize Socket.IO connection with proper configuration
+const socket = io('https://live-production-cf6e.up.railway.app', {
+    transports: ['websocket', 'polling'],
+    secure: true,
+    rejectUnauthorized: false,
+    path: '/socket.io/'
+});
 
 // Initialize PeerJS
 let peer = null;
@@ -47,13 +52,20 @@ async function initializeMedia() {
     }
 }
 
-// Initialize PeerJS
+// Initialize PeerJS with proper configuration
 function initializePeer() {
     peer = new Peer(undefined, {
         host: 'live-production-cf6e.up.railway.app',
         port: 443,
         path: '/peerjs',
-        secure: true
+        secure: true,
+        debug: 3,
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        }
     });
 
     peer.on('open', (id) => {
