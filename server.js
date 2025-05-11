@@ -5,9 +5,10 @@ const io = require('socket.io')(http, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"],
-        credentials: true
+        credentials: true,
+        allowedHeaders: ["*"]
     },
-    transports: ['polling', 'websocket'],
+    transports: ['websocket', 'polling'],
     allowEIO3: true,
     pingTimeout: 60000,
     pingInterval: 25000,
@@ -15,7 +16,11 @@ const io = require('socket.io')(http, {
     allowUpgrades: true,
     perMessageDeflate: {
         threshold: 2048
-    }
+    },
+    maxHttpBufferSize: 1e8,
+    path: '/socket.io/',
+    serveClient: false,
+    cookie: false
 });
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
