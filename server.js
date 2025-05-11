@@ -4,20 +4,34 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http, {
     cors: {
         origin: "*",
-        methods: ["GET", "POST"]
-    }
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true
 });
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const { ExpressPeerServer } = require('peer');
 
-app.use(cors());
+// Enable CORS
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST'],
+    credentials: true
+}));
+
 app.use(express.static('public'));
 
-// Create PeerJS server
+// Create PeerJS server with proper configuration
 const peerServer = ExpressPeerServer(http, {
     debug: true,
-    path: '/peerjs'
+    path: '/peerjs',
+    proxied: true,
+    ssl: {
+        key: process.env.SSL_KEY,
+        cert: process.env.SSL_CERT
+    }
 });
 
 // Use PeerJS server
@@ -145,7 +159,8 @@ function isUserInCall(userId) {
     return false;
 }
 
+// Update the port to use environment variable
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
+http.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 }); 
