@@ -22,11 +22,6 @@ const io = require('socket.io')(http, {
     serveClient: false,
     cookie: false,
     connectTimeout: 45000,
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"],
-        credentials: true
-    }
 });
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
