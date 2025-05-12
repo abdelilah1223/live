@@ -8,11 +8,13 @@ function connectSocket() {
     rememberUpgrade: true,
     timeout: 45000,
     reconnection: true,
-    reconnectionAttempts: Infinity,
+    reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000
+    forceNew: true,
+    path: '/socket.io/',
+    secure: true,
+    rejectUnauthorized: false
   });
 
   socket.on('connect', () => {
@@ -23,16 +25,19 @@ function connectSocket() {
   socket.on('connect_error', (error) => {
     console.error('Connection error:', error.message);
     
-    // Fallback to polling after 3 seconds
-    setTimeout(() => {
+    // Try polling first, then upgrade to websocket
+    if (socket.io.engine.transport.name === 'websocket') {
+      console.log('Falling back to polling transport');
       socket.io.opts.transports = ['polling', 'websocket'];
-      socket.io.opts.upgrade = true;
       socket.connect();
-    }, 3000);
+    }
   });
 
   socket.on('reconnect_attempt', (attempt) => {
     console.log(`Reconnection attempt ${attempt}`);
+    if (attempt > 3) {
+      socket.io.opts.transports = ['polling'];
+    }
   });
 
   socket.on('reconnect_failed', () => {
