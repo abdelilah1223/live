@@ -11,11 +11,33 @@ const server = http.createServer(app);
 
 // Enhanced CORS configuration
 app.use(cors({
-  origin: '*',
+  origin: ['https://live-production-cf6e.up.railway.app', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
-  credentials: true
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'X-Forwarded-For',
+    'X-Forwarded-Host',
+    'X-Forwarded-Proto'
+  ],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+// Add security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Access-Control-Allow-Origin', 'https://live-production-cf6e.up.railway.app');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  next();
+});
 
 app.use(express.static('public'));
 
@@ -24,16 +46,30 @@ const peerServer = ExpressPeerServer(server, {
   debug: true,
   path: '/',
   proxied: true,
-  generateClientId: () => uuidv4()
+  generateClientId: () => uuidv4(),
+  ssl: {
+    key: process.env.SSL_KEY,
+    cert: process.env.SSL_CERT
+  }
 });
 app.use('/peerjs', peerServer);
 
 // Socket.IO Server with WebSocket fixes
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: ['https://live-production-cf6e.up.railway.app', 'http://localhost:3000'],
     methods: ['GET', 'POST'],
-    credentials: true
+    credentials: true,
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+      'X-Forwarded-For',
+      'X-Forwarded-Host',
+      'X-Forwarded-Proto'
+    ]
   },
   path: '/socket.io/',
   transports: ['websocket', 'polling'],
