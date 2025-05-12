@@ -41,7 +41,21 @@ const io = new Server(server, {
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
-  cookie: false
+  cookie: false,
+  allowUpgrades: true,
+  maxHttpBufferSize: 1e8,
+  connectTimeout: 45000,
+  upgradeTimeout: 30000
+});
+
+// Add error handling for the server
+server.on('error', (error) => {
+  console.error('Server error:', error);
+});
+
+// Add error handling for Socket.IO
+io.on('error', (error) => {
+  console.error('Socket.IO error:', error);
 });
 
 // Trust proxy for Railway
