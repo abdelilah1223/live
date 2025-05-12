@@ -1,6 +1,7 @@
 // Enhanced Socket.IO client with WebSocket fixes
 let socket;
 let sessionId = localStorage.getItem('sessionId');
+let heartbeatInterval;
 
 function connectSocket() {
   socket = io('wss://live-production-cf6e.up.railway.app', {
@@ -31,10 +32,14 @@ function connectSocket() {
     sessionId = socket.id;
     localStorage.setItem('sessionId', sessionId);
     registerUser();
+    
+    // Start heartbeat
+    startHeartbeat();
   });
 
   socket.on('connect_error', (error) => {
     console.error('Connection error:', error.message);
+    stopHeartbeat();
     
     // Try polling first, then upgrade to websocket
     if (socket.io.engine.transport.name === 'websocket') {
@@ -59,6 +64,7 @@ function connectSocket() {
 
   socket.on('reconnect_failed', () => {
     console.error('Reconnection failed');
+    stopHeartbeat();
     localStorage.removeItem('sessionId');
     sessionId = null;
     showToast('Connection to server lost. Please refresh the page.');
@@ -66,12 +72,35 @@ function connectSocket() {
 
   socket.on('disconnect', (reason) => {
     console.log('Disconnected:', reason);
+    stopHeartbeat();
     if (reason === 'io server disconnect') {
       // Server initiated disconnect, clear session
       localStorage.removeItem('sessionId');
       sessionId = null;
     }
   });
+
+  socket.on('peerDisconnected', ({ peerId, reason }) => {
+    console.log(`Peer ${peerId} disconnected. Reason: ${reason}`);
+    showToast(`${peerId} disconnected`);
+    removeVideoStream(peerId);
+  });
+}
+
+function startHeartbeat() {
+  stopHeartbeat(); // Clear any existing interval
+  heartbeatInterval = setInterval(() => {
+    if (socket.connected) {
+      socket.emit('heartbeat');
+    }
+  }, 15000); // Send heartbeat every 15 seconds
+}
+
+function stopHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
 }
 
 // DOM Elements
@@ -399,12 +428,6 @@ function setupSocketEvents() {
     if (peer && newPeerId) {
       connectToPeer(newPeerId);
     }
-  });
-
-  socket.on('peerDisconnected', ({ peerId }) => {
-    console.log('Peer disconnected:', peerId);
-    showToast(`${peerId} disconnected`);
-    removeVideoStream(peerId);
   });
 
   socket.on('joinedGroupCall', ({ roomId, peers }) => {
