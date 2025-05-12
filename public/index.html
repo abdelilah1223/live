@@ -8,8 +8,23 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
- 
+    <style>
+        .video-container video {
+            max-width: 100%;
+            max-height: 300px;
+            object-fit: cover;
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
     <div class="container mx-auto px-4 py-8 flex-grow">
@@ -27,35 +42,32 @@
         <!-- Main Menu -->
         <div id="mainMenu" class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Random Call -->
-            div class="bg-white p-6 rounded-lg shadow-md">
+            <div class="bg-white p-6 rounded-lg shadow-md">
                 <h2 class="text-xl font-semibold mb-4">Random Call</h2>
-                 <button id="startRandomCall" class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition">
+                <button id="startRandomCall" class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition">
                     Start Random Call
                 </button>
             </div>
 
             <!-- Direct Call -->
-
-                    <div class="bg-white p-6 rounded-lg shadow-md">
+            <div class="bg-white p-6 rounded-lg shadow-md">
                 <h2 class="text-xl font-semibold mb-4">Direct Call</h2>
                 <div class="space-y-4">
                     <input type="text" id="targetUserId" placeholder="Enter user ID" 
-                           class="w-full p-2 border rounded">
+                           class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <button id="startDirectCall" class="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition">
-                        Call Your Freinds 
+                        Call User
                     </button>
                 </div>
             </div>
 
             <!-- Group Call -->
-                     <div class="bg-white p-6 rounded-lg shadow-md">
+            <div class="bg-white p-6 rounded-lg shadow-md">
                 <h2 class="text-xl font-semibold mb-4">Group Call</h2>
-             <button id="createGroupCall" class="w-full bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700 transition">
+                <button id="createGroupCall" class="w-full bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700 transition">
                     Create Group Call
                 </button>
             </div>
-            
-      
         </div>
 
         <!-- Call Interface -->
