@@ -1,3 +1,46 @@
+// Enhanced Socket.IO client with WebSocket fixes
+let socket;
+
+function connectSocket() {
+  socket = io('https://live-production-cf6e.up.railway.app', {
+    path: '/socket.io/',
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    timeout: 20000,
+    autoConnect: true,
+    withCredentials: false,
+    upgrade: false,
+    rememberUpgrade: true
+  });
+
+  socket.on('connect', () => {
+    console.log('Connected with transport:', socket.io.engine.transport.name);
+    registerUser();
+  });
+
+  socket.on('connect_error', (error) => {
+    console.error('Connection error:', error.message);
+    
+    // Fallback to polling after 3 seconds
+    setTimeout(() => {
+      socket.io.opts.transports = ['polling', 'websocket'];
+      socket.io.opts.upgrade = true;
+      socket.connect();
+    }, 3000);
+  });
+
+  socket.on('reconnect_attempt', (attempt) => {
+    console.log(`Reconnection attempt ${attempt}`);
+  });
+
+  socket.on('reconnect_failed', () => {
+    console.error('Reconnection failed');
+    showToast('Connection to server lost. Please refresh the page.');
+  });
+}
+
 // DOM Elements
 const userIdDisplay = document.getElementById('userIdDisplay');
 const userIdElement = document.getElementById('userId');
@@ -11,7 +54,6 @@ const loadingAnimation = document.getElementById('loadingAnimation');
 const targetUserIdInput = document.getElementById('targetUserId');
 
 // State
-let socket;
 let peer;
 let localStream;
 let currentRoomId;
@@ -24,36 +66,7 @@ localStorage.setItem('userId', myUserId);
 userIdDisplay.classList.remove('hidden');
 userIdElement.textContent = myUserId;
 
-// Initialize Socket.IO with robust connection handling
-function connectSocket() {
-  socket = io('https://live-production-cf6e.up.railway.app', {
-    path: '/socket.io/',
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1000,
-    timeout: 20000,
-    upgrade: false
-  });
-
-  socket.on('connect', () => {
-    console.log('Connected with transport:', socket.io.engine.transport.name);
-    registerUser();
-  });
-
-  socket.on('connect_error', (error) => {
-    console.error('Connection error:', error);
-    // Attempt reconnection with different transport if needed
-    setTimeout(() => {
-      if (!socket.connected) {
-        socket.io.opts.transports = ['polling', 'websocket'];
-        socket.connect();
-      }
-    }, 3000);
-  });
-}
-
-// Initialize PeerJS with error handling
+// Initialize PeerJS
 function initializePeer() {
   try {
     peer = new Peer({
@@ -65,8 +78,7 @@ function initializePeer() {
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
+          { urls: 'stun:global.stun.twilio.com:3478' }
         ]
       }
     });
@@ -86,11 +98,9 @@ function initializePeer() {
     });
 
     peer.on('call', (call) => {
-      console.log('Incoming call from:', call.peer);
       if (localStream) {
         call.answer(localStream);
         call.on('stream', (remoteStream) => {
-          console.log('Received remote stream from:', call.peer);
           addVideoStream(remoteStream, call.peer);
         });
         call.on('close', () => {
@@ -143,6 +153,28 @@ async function startRandomCall() {
   }
 }
 
+async function startDirectCall() {
+  const targetUserId = targetUserIdInput.value.trim();
+  if (!targetUserId) {
+    showToast('Please enter a user ID');
+    return;
+  }
+
+  if (await initializeMedia()) {
+    initializePeer();
+    showLoading();
+    socket.emit('requestDirectCall', targetUserId);
+  }
+}
+
+async function createGroupCall() {
+  if (await initializeMedia()) {
+    initializePeer();
+    showLoading();
+    socket.emit('createGroupCall');
+  }
+}
+
 async function acceptCall() {
   if (await initializeMedia()) {
     initializePeer();
@@ -152,62 +184,55 @@ async function acceptCall() {
   }
 }
 
-function connectToPeer(peerId) {
-  if (!peer || !localStream || !peerId) return;
-
-  console.log('Calling peer:', peerId);
-  const call = peer.call(peerId, localStream);
-  
-  call.on('stream', (remoteStream) => {
-    console.log('Received remote stream from call:', peerId);
-    addVideoStream(remoteStream, peerId);
-  });
-  
-  call.on('close', () => {
-    console.log('Call closed with:', peerId);
-    removeVideoStream(peerId);
-  });
+function rejectCall() {
+  socket.emit('rejectCall', currentRoomId);
+  hideIncomingCallModal();
+  currentRoomId = null;
 }
 
-// Socket.IO Event Handlers
-function setupSocketEvents() {
-  socket.on('incomingCall', ({ roomId, peerId, callerPeerId } = {}) => {
-    if (!roomId || !peerId) {
-      console.error('Invalid incoming call data');
-      return;
-    }
-    currentRoomId = roomId;
-    callerIdElement.textContent = `Incoming call from ${peerId}`;
-    showIncomingCallModal();
-  });
+function endCall() {
+  stopLocalStream();
+  if (peer) {
+    peer.destroy();
+    peer = null;
+  }
+  currentRoomId = null;
+  hideCallInterface();
+  showMainMenu();
+  clearRemoteVideos();
+}
 
-  socket.on('callAccepted', ({ peerId, targetPeerId } = {}) => {
-    if (!peerId || !targetPeerId) {
-      console.error('Invalid call accepted data');
-      return;
-    }
-    hideLoading();
-    showCallInterface();
-    connectToPeer(targetPeerId);
-  });
+// Video Stream Management
+function addVideoStream(stream, peerId) {
+  removeVideoStream(peerId);
 
-  socket.on('signal', ({ peerId, signal } = {}) => {
-    if (peer && peerId && signal) {
-      peer.signal(signal);
-    }
-  });
+  const videoContainer = document.createElement('div');
+  videoContainer.className = 'video-container';
+  videoContainer.id = `video-${peerId}`;
 
-  // Handle other events with proper error checking
-  socket.on('callRejected', () => {
-    hideLoading();
-    showToast('Call rejected');
-    endCall();
-  });
+  const video = document.createElement('video');
+  video.srcObject = stream;
+  video.autoplay = true;
+  video.playsInline = true;
 
-  socket.on('noUsersAvailable', () => {
-    hideLoading();
-    showToast('No users available');
-  });
+  const peerLabel = document.createElement('div');
+  peerLabel.className = 'peer-label';
+  peerLabel.textContent = peerId;
+
+  videoContainer.appendChild(video);
+  videoContainer.appendChild(peerLabel);
+  remoteVideos.appendChild(videoContainer);
+}
+
+function removeVideoStream(peerId) {
+  const existingVideo = document.getElementById(`video-${peerId}`);
+  if (existingVideo) {
+    existingVideo.remove();
+  }
+}
+
+function clearRemoteVideos() {
+  remoteVideos.innerHTML = '';
 }
 
 // UI Functions
@@ -227,12 +252,13 @@ function hideLoading() {
   loadingAnimation.classList.add('hidden');
 }
 
-function showIncomingCallModal() {
-  incomingCallModal.classList.remove('hidden');
+function showMainMenu() {
+  mainMenu.classList.remove('hidden');
+  callInterface.classList.add('hidden');
 }
 
-function hideIncomingCallModal() {
-  incomingCallModal.classList.add('hidden');
+function hideMainMenu() {
+  mainMenu.classList.add('hidden');
 }
 
 function showCallInterface() {
@@ -244,53 +270,112 @@ function hideCallInterface() {
   callInterface.classList.add('hidden');
 }
 
-function showMainMenu() {
-  mainMenu.classList.remove('hidden');
-  callInterface.classList.add('hidden');
+function showIncomingCallModal() {
+  incomingCallModal.classList.remove('hidden');
 }
 
-function addVideoStream(stream, peerId) {
-  const videoContainer = document.createElement('div');
-  videoContainer.className = 'video-container';
-  videoContainer.id = `video-${peerId}`;
-  
-  const video = document.createElement('video');
-  video.srcObject = stream;
-  video.autoplay = true;
-  video.playsInline = true;
-  
-  const peerLabel = document.createElement('div');
-  peerLabel.className = 'peer-label';
-  peerLabel.textContent = peerId;
-  
-  videoContainer.appendChild(video);
-  videoContainer.appendChild(peerLabel);
-  remoteVideos.appendChild(videoContainer);
+function hideIncomingCallModal() {
+  incomingCallModal.classList.add('hidden');
 }
 
-function removeVideoStream(peerId) {
-  const existingVideo = document.getElementById(`video-${peerId}`);
-  if (existingVideo) {
-    existingVideo.remove();
+function toggleMute() {
+  if (localStream) {
+    isMuted = !isMuted;
+    localStream.getAudioTracks().forEach(track => {
+      track.enabled = !isMuted;
+    });
+    const muteButton = document.querySelector('.fa-microphone');
+    muteButton.classList.toggle('fa-microphone-slash');
+    showToast(isMuted ? 'Muted' : 'Unmuted');
   }
 }
 
-function clearRemoteVideos() {
-  remoteVideos.innerHTML = '';
-}
-
-function endCall() {
-  stopLocalStream();
-  if (peer) {
-    peer.destroy();
-    peer = null;
+function toggleVideo() {
+  if (localStream) {
+    isVideoEnabled = !isVideoEnabled;
+    localStream.getVideoTracks().forEach(track => {
+      track.enabled = isVideoEnabled;
+    });
+    const videoButton = document.querySelector('.fa-video');
+    videoButton.classList.toggle('fa-video-slash');
+    showToast(isVideoEnabled ? 'Video on' : 'Video off');
   }
-  currentRoomId = null;
-  hideCallInterface();
-  showMainMenu();
-  clearRemoteVideos();
 }
 
+function copyUserId() {
+  navigator.clipboard.writeText(myUserId);
+  showToast('User ID copied');
+}
+
+// Socket.IO Event Handlers
+function setupSocketEvents() {
+  socket.on('incomingCall', ({ roomId, peerId }) => {
+    currentRoomId = roomId;
+    callerIdElement.textContent = `Incoming call from ${peerId}`;
+    showIncomingCallModal();
+  });
+
+  socket.on('callAccepted', ({ peerId, targetPeerId }) => {
+    hideLoading();
+    showCallInterface();
+    connectToPeer(targetPeerId);
+  });
+
+  socket.on('callRejected', () => {
+    hideLoading();
+    showToast('Call rejected');
+    endCall();
+  });
+
+  socket.on('userNotAvailable', () => {
+    hideLoading();
+    showToast('User not available');
+  });
+
+  socket.on('userInCall', () => {
+    hideLoading();
+    showToast('User is in another call');
+  });
+
+  socket.on('noUsersAvailable', () => {
+    hideLoading();
+    showToast('No users available');
+  });
+
+  socket.on('groupCallCreated', ({ roomId }) => {
+    currentRoomId = roomId;
+    hideLoading();
+    showCallInterface();
+    const joinLink = `${window.location.origin}?room=${roomId}`;
+    showToast(`Group call created! Share: ${joinLink}`);
+  });
+
+  socket.on('newUserJoined', ({ newPeerId }) => {
+    if (peer && newPeerId) {
+      connectToPeer(newPeerId);
+    }
+  });
+
+  socket.on('peerDisconnected', ({ peerId }) => {
+    showToast(`${peerId} disconnected`);
+    removeVideoStream(peerId);
+  });
+}
+
+// Peer Connection
+function connectToPeer(peerId) {
+  if (!peer || !localStream || !peerId) return;
+
+  const call = peer.call(peerId, localStream);
+  call.on('stream', (remoteStream) => {
+    addVideoStream(remoteStream, peerId);
+  });
+  call.on('close', () => {
+    removeVideoStream(peerId);
+  });
+}
+
+// User registration
 function registerUser() {
   socket.emit('register', myUserId);
 }
@@ -298,15 +383,24 @@ function registerUser() {
 // Initialize on load
 window.addEventListener('load', () => {
   connectSocket();
-  initializePeer();
   setupSocketEvents();
+  initializePeer();
   
-  // Event listeners
-  document.getElementById('startRandomCall').addEventListener('click', startRandomCall);
-  document.getElementById('acceptCall').addEventListener('click', acceptCall);
-  document.getElementById('rejectCall').addEventListener('click', () => {
-    socket.emit('rejectCall', currentRoomId);
-    hideIncomingCallModal();
-  });
-  document.getElementById('endCall').addEventListener('click', endCall);
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomId = urlParams.get('room');
+  if (roomId) {
+    showLoading();
+    socket.emit('joinGroupCall', roomId);
+  }
 });
+
+// Event Listeners
+document.getElementById('startRandomCall').addEventListener('click', startRandomCall);
+document.getElementById('startDirectCall').addEventListener('click', startDirectCall);
+document.getElementById('createGroupCall').addEventListener('click', createGroupCall);
+document.getElementById('acceptCall').addEventListener('click', acceptCall);
+document.getElementById('rejectCall').addEventListener('click', rejectCall);
+document.getElementById('endCall').addEventListener('click', endCall);
+document.getElementById('toggleMute').addEventListener('click', toggleMute);
+document.getElementById('toggleVideo').addEventListener('click', toggleVideo);
+document.getElementById('copyUserId').addEventListener('click', copyUserId);
