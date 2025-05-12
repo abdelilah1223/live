@@ -14,7 +14,7 @@ const server = http.createServer(app);
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
@@ -24,13 +24,21 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Add favicon route to prevent 404 errors
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: Date.now() });
+});
+
 // PeerJS Server Configuration
 const peerServer = ExpressPeerServer(server, {
-  debug: true,
-  path: '/',
+  debug: false,
+  path: '/peerjs',
   proxied: true,
-  generateClientId: () => uuidv4()
+  generateClientId: () => uuidv4(),
+  aliveTimeout: 60000,
+  concurrent_limit: 5000
 });
+
 app.use('/peerjs', peerServer);
 
 // Socket.IO Server Configuration
@@ -40,24 +48,27 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
     credentials: true
   },
-  path: '/socket.io/',
+  path: '/socket.io',
   transports: ['websocket', 'polling'],
   serveClient: false,
-  pingTimeout: 60000,
-  pingInterval: 25000
+  pingTimeout: 30000,
+  pingInterval: 15000,
+  cookie: false,
+  allowEIO3: true
 });
 
 // Store active connections
-const activeUsers = new Map();
-const activePeers = new Map();
-const activeRooms = new Map();
+const activeConnections = new Map(); // userId -> { socketId, peerId }
 
 io.on('connection', (socket) => {
   console.log('New connection:', socket.id);
 
   // Register user
   socket.on('register', (userId) => {
-    activeUsers.set(userId, socket.id);
+    activeConnections.set(userId, { 
+      socketId: socket.id,
+      peerId: null
+    });
     socket.userId = userId;
     socket.emit('registered', { userId });
     console.log(`User ${userId} registered`);
@@ -65,66 +76,59 @@ io.on('connection', (socket) => {
 
   // Register peer ID
   socket.on('register-peer', (peerId) => {
-    if (socket.userId) {
-      activePeers.set(socket.userId, peerId);
+    if (socket.userId && activeConnections.has(socket.userId)) {
+      const userData = activeConnections.get(socket.userId);
+      userData.peerId = peerId;
+      activeConnections.set(socket.userId, userData);
       console.log(`Peer registered: ${socket.userId} -> ${peerId}`);
     }
   });
 
   // Random call request
-  socket.on('requestRandomCall', () => {
-    const availableUsers = [...activeUsers.entries()]
-      .filter(([id, sid]) => sid !== socket.id);
+  socket.on('request-random-call', () => {
+    const availableUsers = [...activeConnections.entries()]
+      .filter(([userId, data]) => userId !== socket.userId && data.peerId);
     
     if (availableUsers.length === 0) {
-      return socket.emit('noUsersAvailable');
+      return socket.emit('no-users-available');
     }
 
-    const [targetUserId, targetSocketId] = availableUsers[
+    const [targetUserId, targetData] = availableUsers[
       Math.floor(Math.random() * availableUsers.length)
     ];
     const roomId = uuidv4();
     
-    activeRooms.set(roomId, {
-      users: [socket.userId, targetUserId],
-      sockets: [socket.id, targetSocketId]
+    // Notify both users
+    socket.emit('random-call-matched', { 
+      roomId,
+      targetUserId,
+      targetPeerId: targetData.peerId
     });
 
-    // Notify both users with proper data structure
-    io.to(socket.id).emit('randomCallMatched', { 
+    io.to(targetData.socketId).emit('incoming-call', {
       roomId,
-      peerId: targetUserId,
-      targetPeerId: activePeers.get(targetUserId)
-    });
-
-    io.to(targetSocketId).emit('incomingCall', {
-      roomId,
-      peerId: socket.userId,
-      callerPeerId: activePeers.get(socket.userId)
+      callerUserId: socket.userId,
+      callerPeerId: activeConnections.get(socket.userId).peerId
     });
   });
 
   // Call acceptance
-  socket.on('acceptCall', (roomId) => {
-    const room = activeRooms.get(roomId);
-    if (!room) return;
+  socket.on('accept-call', ({ roomId, callerUserId }) => {
+    const callerData = activeConnections.get(callerUserId);
+    if (!callerData) return;
 
-    const [callerSocketId] = room.sockets;
-    io.to(callerSocketId).emit('callAccepted', {
+    io.to(callerData.socketId).emit('call-accepted', {
       roomId,
-      peerId: socket.userId,
-      targetPeerId: activePeers.get(socket.userId)
+      targetUserId: socket.userId,
+      targetPeerId: activeConnections.get(socket.userId).peerId
     });
   });
 
-  // WebRTC signaling
-  socket.on('signal', ({ targetUserId, signal }) => {
-    const targetSocketId = activeUsers.get(targetUserId);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('signal', {
-        peerId: socket.userId,
-        signal
-      });
+  // Call rejection
+  socket.on('reject-call', ({ roomId, callerUserId }) => {
+    const callerData = activeConnections.get(callerUserId);
+    if (callerData) {
+      io.to(callerData.socketId).emit('call-rejected', { roomId });
     }
   });
 
@@ -133,24 +137,37 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
     
     if (socket.userId) {
-      activeUsers.delete(socket.userId);
-      activePeers.delete(socket.userId);
-
-      // Clean up rooms
-      for (const [roomId, room] of activeRooms.entries()) {
-        if (room.sockets.includes(socket.id)) {
-          room.sockets.forEach(sid => {
-            if (sid !== socket.id) {
-              io.to(sid).emit('peerDisconnected', {
-                peerId: socket.userId
-              });
-            }
+      // Notify any connected peers
+      activeConnections.forEach((data, userId) => {
+        if (data.peerId && userId !== socket.userId) {
+          io.to(data.socketId).emit('peer-disconnected', {
+            peerId: activeConnections.get(socket.userId)?.peerId
           });
-          activeRooms.delete(roomId);
         }
-      }
+      });
+      
+      activeConnections.delete(socket.userId);
     }
   });
+
+  // Error handling
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
+  });
+});
+
+// Peer server events
+peerServer.on('connection', (client) => {
+  console.log('PeerJS client connected:', client.getId());
+});
+
+peerServer.on('disconnect', (client) => {
+  console.log('PeerJS client disconnected:', client.getId());
+});
+
+// Error handling
+server.on('error', (error) => {
+  console.error('Server error:', error);
 });
 
 const PORT = process.env.PORT || 3000;
