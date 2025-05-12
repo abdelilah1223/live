@@ -140,8 +140,19 @@ function initializePeer() {
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:global.stun.twilio.com:3478' }
-        ]
+          { urls: 'stun:global.stun.twilio.com:3478' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' }
+        ],
+        iceCandidatePoolSize: 10,
+        iceTransportPolicy: 'all',
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require'
+      },
+      ssl: {
+        rejectUnauthorized: false
       }
     });
 
@@ -161,11 +172,21 @@ function initializePeer() {
 
     peer.on('call', (call) => {
       if (localStream) {
+        console.log('Incoming call from:', call.peer);
         call.answer(localStream);
+        
         call.on('stream', (remoteStream) => {
+          console.log('Received remote stream from:', call.peer);
           addVideoStream(remoteStream, call.peer);
         });
+
         call.on('close', () => {
+          console.log('Call closed with:', call.peer);
+          removeVideoStream(call.peer);
+        });
+
+        call.on('error', (err) => {
+          console.error('Call error:', err);
           removeVideoStream(call.peer);
         });
       }
@@ -173,6 +194,11 @@ function initializePeer() {
 
     peer.on('disconnected', () => {
       console.log('PeerJS disconnected');
+      setTimeout(initializePeer, 3000);
+    });
+
+    peer.on('close', () => {
+      console.log('PeerJS connection closed');
       setTimeout(initializePeer, 3000);
     });
 
@@ -185,10 +211,20 @@ function initializePeer() {
 // Media Functions
 async function initializeMedia() {
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true
-    });
+    const constraints = {
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: 'user'
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    };
+
+    localStream = await navigator.mediaDevices.getUserMedia(constraints);
     localVideo.srcObject = localStream;
     return true;
   } catch (err) {
@@ -303,7 +339,7 @@ function showToast(message) {
   toast.className = 'toast';
   toast.textContent = message;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 9000);
+  setTimeout(() => toast.remove(), 3000);
 }
 
 function showLoading() {
@@ -449,13 +485,26 @@ function setupSocketEvents() {
 
 // Peer Connection
 function connectToPeer(peerId) {
-  if (!peer || !localStream || !peerId) return;
+  if (!peer || !localStream || !peerId) {
+    console.error('Cannot connect to peer:', { peer, localStream, peerId });
+    return;
+  }
 
+  console.log('Connecting to peer:', peerId);
   const call = peer.call(peerId, localStream);
+  
   call.on('stream', (remoteStream) => {
+    console.log('Received remote stream from:', peerId);
     addVideoStream(remoteStream, peerId);
   });
+
   call.on('close', () => {
+    console.log('Call closed with:', peerId);
+    removeVideoStream(peerId);
+  });
+
+  call.on('error', (err) => {
+    console.error('Call error with peer:', peerId, err);
     removeVideoStream(peerId);
   });
 }
