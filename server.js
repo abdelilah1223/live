@@ -50,8 +50,31 @@ const peerServer = ExpressPeerServer(server, {
   ssl: {
     key: process.env.SSL_KEY,
     cert: process.env.SSL_CERT
+  },
+  allow_discovery: true,
+  ip_limit: 5000,
+  concurrent_limit: 5000,
+  cleanup_out_msgs: 1000,
+  ping_interval: 5000,
+  ping_timeout: 5000,
+  ssl: {
+    rejectUnauthorized: false
   }
 });
+
+// Add error handling for PeerJS
+peerServer.on('connection', (client) => {
+  console.log('PeerJS client connected:', client.id);
+});
+
+peerServer.on('disconnect', (client) => {
+  console.log('PeerJS client disconnected:', client.id);
+});
+
+peerServer.on('error', (err) => {
+  console.error('PeerJS error:', err);
+});
+
 app.use('/peerjs', peerServer);
 
 // Socket.IO Server with WebSocket fixes
