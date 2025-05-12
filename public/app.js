@@ -535,7 +535,7 @@ function setupSocketEvents() {
     copyButton.onclick = () => copyToClipboard(joinLink);
     
     // Add button to the call interface
-    const callControls = document.querySelector('.call-controls');
+    const callControls = document.querySelector('.controls');
     if (callControls) {
       callControls.insertBefore(copyButton, callControls.firstChild);
     }
