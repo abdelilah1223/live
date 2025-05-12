@@ -2,6 +2,7 @@
 let socket;
 let sessionId = localStorage.getItem('sessionId');
 let heartbeatInterval;
+let currentPeerConnections = new Map(); // Track peer connections
 
 function connectSocket() {
   socket = io('wss://live-production-cf6e.up.railway.app', {
@@ -84,6 +85,7 @@ function connectSocket() {
     console.log(`Peer ${peerId} disconnected. Reason: ${reason}`);
     showToast(`${peerId} disconnected`);
     removeVideoStream(peerId);
+    closePeerConnection(peerId);
   });
 }
 
@@ -127,6 +129,15 @@ let myUserId = localStorage.getItem('userId') || `user_${Math.random().toString(
 localStorage.setItem('userId', myUserId);
 userIdDisplay.classList.remove('hidden');
 userIdElement.textContent = myUserId;
+
+// Enhanced Peer Connection Management
+function closePeerConnection(peerId) {
+  const peerConnection = currentPeerConnections.get(peerId);
+  if (peerConnection) {
+    peerConnection.close();
+    currentPeerConnections.delete(peerId);
+  }
+}
 
 // Initialize PeerJS
 function initializePeer() {
@@ -183,11 +194,13 @@ function initializePeer() {
         call.on('close', () => {
           console.log('Call closed with:', call.peer);
           removeVideoStream(call.peer);
+          closePeerConnection(call.peer);
         });
 
         call.on('error', (err) => {
           console.error('Call error:', err);
           removeVideoStream(call.peer);
+          closePeerConnection(call.peer);
         });
       }
     });
@@ -289,11 +302,22 @@ function rejectCall() {
 }
 
 function endCall() {
+  // Disconnect from all peers
+  currentPeerConnections.forEach((connection, peerId) => {
+    connection.close();
+    removeVideoStream(peerId);
+  });
+  currentPeerConnections.clear();
+
+  // Close local stream and peer connection
   stopLocalStream();
   if (peer) {
     peer.destroy();
     peer = null;
   }
+
+  // Reset UI and send disconnect signal
+  socket.emit('leaveRoom', currentRoomId);
   currentRoomId = null;
   hideCallInterface();
   showMainMenu();
@@ -305,16 +329,17 @@ function addVideoStream(stream, peerId) {
   removeVideoStream(peerId);
 
   const videoContainer = document.createElement('div');
-  videoContainer.className = 'video-container';
+  videoContainer.className = 'video-container relative';
   videoContainer.id = `video-${peerId}`;
 
   const video = document.createElement('video');
   video.srcObject = stream;
   video.autoplay = true;
   video.playsInline = true;
+  video.className = 'w-full h-full object-cover rounded';
 
   const peerLabel = document.createElement('div');
-  peerLabel.className = 'peer-label';
+  peerLabel.className = 'absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm';
   peerLabel.textContent = peerId;
 
   videoContainer.appendChild(video);
@@ -336,7 +361,7 @@ function clearRemoteVideos() {
 // UI Functions
 function showToast(message, duration = 3000) {
   const toast = document.createElement('div');
-  toast.className = 'toast';
+  toast.className = 'fixed top-4 right-4 bg-black text-white px-4 py-2 rounded z-50';
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), duration);
@@ -408,7 +433,7 @@ function toggleMute() {
     localStream.getAudioTracks().forEach(track => {
       track.enabled = !isMuted;
     });
-    const muteButton = document.querySelector('.fa-microphone');
+    const muteButton = document.querySelector('#toggleMute i');
     muteButton.classList.toggle('fa-microphone-slash');
     showToast(isMuted ? 'Muted' : 'Unmuted');
   }
@@ -420,7 +445,7 @@ function toggleVideo() {
     localStream.getVideoTracks().forEach(track => {
       track.enabled = isVideoEnabled;
     });
-    const videoButton = document.querySelector('.fa-video');
+    const videoButton = document.querySelector('#toggleVideo i');
     videoButton.classList.toggle('fa-video-slash');
     showToast(isVideoEnabled ? 'Video on' : 'Video off');
   }
@@ -472,23 +497,29 @@ function setupSocketEvents() {
     showCallInterface();
     const joinLink = `${window.location.origin}?room=${roomId}`;
     
+    // Remove any existing copy link button first
+    const existingCopyButton = document.querySelector('.copy-link-btn');
+    if (existingCopyButton) {
+      existingCopyButton.remove();
+    }
+
+    // Create copy link button
+    const copyButton = document.createElement('button');
+    copyButton.className = 'copy-link-btn bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 absolute top-4 right-4';
+    copyButton.innerHTML = '<i class="fas fa-copy mr-2"></i>Copy Join Link';
+    copyButton.onclick = () => copyToClipboard(joinLink);
+    
+    // Add button to the call interface
+    const callInterface = document.getElementById('callInterface');
+    if (callInterface) {
+      callInterface.appendChild(copyButton);
+    }
+
     // Show notification
     showNotification('Group Call Created', {
       body: 'Click to copy the join link',
       icon: '/favicon.ico'
     });
-
-    // Create and show copy link button
-    const copyButton = document.createElement('button');
-    copyButton.className = 'copy-link-btn';
-    copyButton.innerHTML = '<i class="fas fa-copy"></i> Copy Join Link';
-    copyButton.onclick = () => copyToClipboard(joinLink);
-    
-    // Add button to the call interface
-    const callControls = document.querySelector('.call-controls');
-    if (callControls) {
-      callControls.insertBefore(copyButton, callControls.firstChild);
-    }
 
     showToast(`Group call created! Share the link to invite others.`);
   });
@@ -510,6 +541,7 @@ function setupSocketEvents() {
       body: `${peerId} has joined the call`,
       icon: '/favicon.ico'
     });
+    
     if (peer && newPeerId) {
       connectToPeer(newPeerId);
     }
@@ -517,28 +549,34 @@ function setupSocketEvents() {
 
   socket.on('joinedGroupCall', ({ roomId, peers }) => {
     console.log('Joined group call:', roomId, peers);
+    currentRoomId = roomId;
     hideLoading();
     showCallInterface();
-    currentRoomId = roomId;
+    
+    // Remove any existing copy link button first
+    const existingCopyButton = document.querySelector('.copy-link-btn');
+    if (existingCopyButton) {
+      existingCopyButton.remove();
+    }
+
+    // Create copy link button
+    const joinLink = `${window.location.origin}?room=${roomId}`;
+    const copyButton = document.createElement('button');
+    copyButton.className = 'copy-link-btn bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 absolute top-4 right-4';
+    copyButton.innerHTML = '<i class="fas fa-copy mr-2"></i>Copy Join Link';
+    copyButton.onclick = () => copyToClipboard(joinLink);
+    
+    // Add button to the call interface
+    const callInterface = document.getElementById('callInterface');
+    if (callInterface) {
+      callInterface.appendChild(copyButton);
+    }
     
     // Show notification
     showNotification('Joined Group Call', {
       body: 'You have joined the group call',
       icon: '/favicon.ico'
     });
-
-    // Create and show copy link button
-    const joinLink = `${window.location.origin}?room=${roomId}`;
-    const copyButton = document.createElement('button');
-    copyButton.className = 'copy-link-btn';
-    copyButton.innerHTML = '<i class="fas fa-copy"></i> Copy Join Link';
-    copyButton.onclick = () => copyToClipboard(joinLink);
-    
-    // Add button to the call interface
-    const callControls = document.querySelector('.controls');
-    if (callControls) {
-      callControls.insertBefore(copyButton, callControls.firstChild);
-    }
     
     // Connect to existing peers in the room
     if (peers && peers.length > 0) {
@@ -558,19 +596,29 @@ function setupSocketEvents() {
     });
     showToast(`${peerId} disconnected`);
     removeVideoStream(peerId);
+    closePeerConnection(peerId);
   });
 }
 
 // Peer Connection
 function connectToPeer(peerId) {
-  if (!peer || !localStream || !peerId) {
-    console.error('Cannot connect to peer:', { peer, localStream, peerId });
+  if (!peer || !localStream || !peerId || peerId === myUserId) {
+    console.error('Cannot connect to peer:', { peer, localStream, peerId, myUserId });
+    return;
+  }
+
+  // Check if we already have a connection to this peer
+  if (currentPeerConnections.has(peerId)) {
+    console.log('Already connected to peer:', peerId);
     return;
   }
 
   console.log('Connecting to peer:', peerId);
   const call = peer.call(peerId, localStream);
   
+  // Store the peer connection
+  currentPeerConnections.set(peerId, call);
+
   call.on('stream', (remoteStream) => {
     console.log('Received remote stream from:', peerId);
     addVideoStream(remoteStream, peerId);
@@ -579,11 +627,13 @@ function connectToPeer(peerId) {
   call.on('close', () => {
     console.log('Call closed with:', peerId);
     removeVideoStream(peerId);
+    currentPeerConnections.delete(peerId);
   });
 
   call.on('error', (err) => {
     console.error('Call error with peer:', peerId, err);
     removeVideoStream(peerId);
+    currentPeerConnections.delete(peerId);
   });
 }
 
