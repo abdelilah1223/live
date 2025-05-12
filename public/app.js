@@ -334,12 +334,38 @@ function clearRemoteVideos() {
 }
 
 // UI Functions
-function showToast(message) {
+function showToast(message, duration = 3000) {
   const toast = document.createElement('div');
   toast.className = 'toast';
   toast.textContent = message;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  setTimeout(() => toast.remove(), duration);
+}
+
+function showNotification(title, options = {}) {
+  if (!("Notification" in window)) {
+    console.log("This browser does not support notifications");
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    new Notification(title, options);
+  } else if (Notification.permission !== "denied") {
+    Notification.requestPermission().then(permission => {
+      if (permission === "granted") {
+        new Notification(title, options);
+      }
+    });
+  }
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Link copied to clipboard!');
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+    showToast('Failed to copy link');
+  });
 }
 
 function showLoading() {
@@ -445,7 +471,26 @@ function setupSocketEvents() {
     hideLoading();
     showCallInterface();
     const joinLink = `${window.location.origin}?room=${roomId}`;
-    showToast(`Group call created! Share: ${joinLink}`);
+    
+    // Show notification
+    showNotification('Group Call Created', {
+      body: 'Click to copy the join link',
+      icon: '/favicon.ico'
+    });
+
+    // Create and show copy link button
+    const copyButton = document.createElement('button');
+    copyButton.className = 'copy-link-btn';
+    copyButton.innerHTML = '<i class="fas fa-copy"></i> Copy Join Link';
+    copyButton.onclick = () => copyToClipboard(joinLink);
+    
+    // Add button to the call interface
+    const callControls = document.querySelector('.call-controls');
+    if (callControls) {
+      callControls.insertBefore(copyButton, callControls.firstChild);
+    }
+
+    showToast(`Group call created! Share the link to invite others.`);
   });
 
   socket.on('invalidRoom', () => {
@@ -461,6 +506,10 @@ function setupSocketEvents() {
 
   socket.on('newUserJoined', ({ peerId, newPeerId }) => {
     console.log('New user joined:', peerId, newPeerId);
+    showNotification('New User Joined', {
+      body: `${peerId} has joined the call`,
+      icon: '/favicon.ico'
+    });
     if (peer && newPeerId) {
       connectToPeer(newPeerId);
     }
@@ -472,6 +521,25 @@ function setupSocketEvents() {
     showCallInterface();
     currentRoomId = roomId;
     
+    // Show notification
+    showNotification('Joined Group Call', {
+      body: 'You have joined the group call',
+      icon: '/favicon.ico'
+    });
+
+    // Create and show copy link button
+    const joinLink = `${window.location.origin}?room=${roomId}`;
+    const copyButton = document.createElement('button');
+    copyButton.className = 'copy-link-btn';
+    copyButton.innerHTML = '<i class="fas fa-copy"></i> Copy Join Link';
+    copyButton.onclick = () => copyToClipboard(joinLink);
+    
+    // Add button to the call interface
+    const callControls = document.querySelector('.call-controls');
+    if (callControls) {
+      callControls.insertBefore(copyButton, callControls.firstChild);
+    }
+    
     // Connect to existing peers in the room
     if (peers && peers.length > 0) {
       peers.forEach(peerInfo => {
@@ -480,6 +548,16 @@ function setupSocketEvents() {
         }
       });
     }
+  });
+
+  socket.on('peerDisconnected', ({ peerId, reason }) => {
+    console.log(`Peer ${peerId} disconnected. Reason: ${reason}`);
+    showNotification('User Left', {
+      body: `${peerId} has left the call`,
+      icon: '/favicon.ico'
+    });
+    showToast(`${peerId} disconnected`);
+    removeVideoStream(peerId);
   });
 }
 
@@ -516,6 +594,11 @@ function registerUser() {
 
 // Initialize on load
 window.addEventListener('load', () => {
+  // Request notification permission
+  if ("Notification" in window) {
+    Notification.requestPermission();
+  }
+
   connectSocket();
   setupSocketEvents();
   initializePeer();
