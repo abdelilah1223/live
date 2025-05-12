@@ -250,7 +250,7 @@ function showToast(message) {
   toast.className = 'toast';
   toast.textContent = message;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 9000);
+  setTimeout(() => toast.remove(), 3000);
 }
 
 function showLoading() {
@@ -359,15 +359,44 @@ function setupSocketEvents() {
     showToast(`Group call created! Share: ${joinLink}`);
   });
 
-  socket.on('newUserJoined', ({ newPeerId }) => {
+  socket.on('invalidRoom', () => {
+    hideLoading();
+    showToast('Invalid room ID or room no longer exists');
+    window.history.replaceState({}, document.title, window.location.pathname);
+  });
+
+  socket.on('alreadyInRoom', () => {
+    hideLoading();
+    showToast('You are already in this room');
+  });
+
+  socket.on('newUserJoined', ({ peerId, newPeerId }) => {
+    console.log('New user joined:', peerId, newPeerId);
     if (peer && newPeerId) {
       connectToPeer(newPeerId);
     }
   });
 
   socket.on('peerDisconnected', ({ peerId }) => {
+    console.log('Peer disconnected:', peerId);
     showToast(`${peerId} disconnected`);
     removeVideoStream(peerId);
+  });
+
+  socket.on('joinedGroupCall', ({ roomId, peers }) => {
+    console.log('Joined group call:', roomId, peers);
+    hideLoading();
+    showCallInterface();
+    currentRoomId = roomId;
+    
+    // Connect to existing peers in the room
+    if (peers && peers.length > 0) {
+      peers.forEach(peerInfo => {
+        if (peerInfo.peerId && peerInfo.peerId !== myUserId) {
+          connectToPeer(peerInfo.peerId);
+        }
+      });
+    }
   });
 }
 
@@ -399,7 +428,16 @@ window.addEventListener('load', () => {
   const roomId = urlParams.get('room');
   if (roomId) {
     showLoading();
-    socket.emit('joinGroupCall', roomId);
+    // Initialize media before joining the call
+    initializeMedia().then(success => {
+      if (success) {
+        console.log('Joining group call with room ID:', roomId);
+        socket.emit('joinGroupCall', roomId);
+      } else {
+        hideLoading();
+        showToast('Could not access camera/microphone');
+      }
+    });
   }
 });
 
