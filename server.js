@@ -45,7 +45,13 @@ const io = new Server(server, {
   allowUpgrades: true,
   maxHttpBufferSize: 1e8,
   connectTimeout: 45000,
-  upgradeTimeout: 30000
+  upgradeTimeout: 30000,
+  perMessageDeflate: {
+    threshold: 2048
+  },
+  httpCompression: {
+    threshold: 2048
+  }
 });
 
 // Add error handling for the server
@@ -56,6 +62,11 @@ server.on('error', (error) => {
 // Add error handling for Socket.IO
 io.on('error', (error) => {
   console.error('Socket.IO error:', error);
+});
+
+// Add connection error handling
+io.engine.on('connection_error', (err) => {
+  console.error('Connection error:', err);
 });
 
 // Trust proxy for Railway
