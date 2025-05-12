@@ -2,17 +2,17 @@
 let socket;
 
 function connectSocket() {
-  socket = io('https://live-production-cf6e.up.railway.app', {
-    path: '/socket.io/',
-    transports: ['websocket'],
+  socket = io('wss://live-production-cf6e.up.railway.app', {
+    transports: ['websocket', 'polling'],
+    upgrade: true,
+    rememberUpgrade: true,
+    timeout: 45000,
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
-    timeout: 20000,
-    autoConnect: true,
-    withCredentials: false,
-    upgrade: false,
-    rememberUpgrade: true
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000
   });
 
   socket.on('connect', () => {
