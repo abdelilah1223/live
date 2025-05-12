@@ -1,5 +1,6 @@
 // Enhanced Socket.IO client with WebSocket fixes
 let socket;
+let sessionId = localStorage.getItem('sessionId');
 
 function connectSocket() {
   socket = io('wss://live-production-cf6e.up.railway.app', {
@@ -18,11 +19,17 @@ function connectSocket() {
     withCredentials: true,
     extraHeaders: {
       'X-Requested-With': 'XMLHttpRequest'
+    },
+    auth: {
+      sessionId: sessionId
     }
   });
 
   socket.on('connect', () => {
     console.log('Connected with transport:', socket.io.engine.transport.name);
+    // Store session ID for reconnection
+    sessionId = socket.id;
+    localStorage.setItem('sessionId', sessionId);
     registerUser();
   });
 
@@ -35,6 +42,12 @@ function connectSocket() {
       socket.io.opts.transports = ['polling', 'websocket'];
       socket.connect();
     }
+
+    // Clear session if connection fails
+    if (error.message.includes('Session ID unknown')) {
+      localStorage.removeItem('sessionId');
+      sessionId = null;
+    }
   });
 
   socket.on('reconnect_attempt', (attempt) => {
@@ -46,7 +59,18 @@ function connectSocket() {
 
   socket.on('reconnect_failed', () => {
     console.error('Reconnection failed');
+    localStorage.removeItem('sessionId');
+    sessionId = null;
     showToast('Connection to server lost. Please refresh the page.');
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('Disconnected:', reason);
+    if (reason === 'io server disconnect') {
+      // Server initiated disconnect, clear session
+      localStorage.removeItem('sessionId');
+      sessionId = null;
+    }
   });
 }
 
