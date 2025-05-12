@@ -110,40 +110,48 @@ io.use((socket, next) => {
   next();
 });
 
-// Add error handling for the server
-server.on('error', (error) => {
-  console.error('Server error:', error);
-});
-
-// Add error handling for Socket.IO
-io.on('error', (error) => {
-  console.error('Socket.IO error:', error);
-});
-
-// Add connection error handling
-io.engine.on('connection_error', (err) => {
-  console.error('Connection error:', err);
-  if (err.code === 1) { // Session ID unknown
-    console.log('Attempting to recover session...');
-  }
-});
-
-// Trust proxy for Railway
-app.set('trust proxy', true);
-
-// Store active connections
+// Store active connections with timestamps
 const activeUsers = new Map();
 const activePeers = new Map();
 const activeRooms = new Map();
+const connectionTimestamps = new Map();
+
+// Add connection monitoring
+function monitorConnections() {
+  const now = Date.now();
+  const timeout = 30000; // 30 seconds
+
+  for (const [userId, socketId] of activeUsers.entries()) {
+    const timestamp = connectionTimestamps.get(socketId);
+    if (timestamp && (now - timestamp) > timeout) {
+      console.log(`Connection timeout for user ${userId}`);
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.disconnect(true);
+      }
+    }
+  }
+}
+
+// Run connection monitoring every 10 seconds
+setInterval(monitorConnections, 10000);
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+  connectionTimestamps.set(socket.id, Date.now());
 
   // Register user
   socket.on('register', (userId) => {
     activeUsers.set(userId, socket.id);
     socket.userId = userId;
+    connectionTimestamps.set(socket.id, Date.now());
     socket.emit('registered', userId);
+    console.log(`User ${userId} registered with socket ${socket.id}`);
+  });
+
+  // Heartbeat mechanism
+  socket.on('heartbeat', () => {
+    connectionTimestamps.set(socket.id, Date.now());
   });
 
   // Register peer ID
@@ -293,12 +301,13 @@ io.on('connection', (socket) => {
   });
 
   // Cleanup on disconnect
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+  socket.on('disconnect', (reason) => {
+    console.log('User disconnected:', socket.id, 'Reason:', reason);
     
     if (socket.userId) {
       activeUsers.delete(socket.userId);
       activePeers.delete(socket.userId);
+      connectionTimestamps.delete(socket.id);
 
       // Clean up rooms
       for (const [roomId, users] of activeRooms.entries()) {
@@ -306,13 +315,23 @@ io.on('connection', (socket) => {
           users.forEach(userSocketId => {
             if (userSocketId !== socket.id) {
               io.to(userSocketId).emit('peerDisconnected', {
-                peerId: socket.userId
+                peerId: socket.userId,
+                reason: reason
               });
             }
           });
           activeRooms.delete(roomId);
         }
       }
+    }
+  });
+
+  // Error handling
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
+    if (socket.userId) {
+      activeUsers.delete(socket.userId);
+      activePeers.delete(socket.userId);
     }
   });
 });
