@@ -213,21 +213,49 @@ io.on('connection', (socket) => {
 
   // Group call join
   socket.on('joinGroupCall', (roomId) => {
+    console.log('Join group call request:', roomId, 'from user:', socket.userId);
+    
     if (!roomId || !activeRooms.has(roomId)) {
+      console.log('Invalid room:', roomId);
       return socket.emit('invalidRoom');
     }
 
     const room = activeRooms.get(roomId);
     if (room.includes(socket.id)) {
+      console.log('User already in room:', socket.userId);
       return socket.emit('alreadyInRoom');
     }
 
+    // Add user to room
     room.push(socket.id);
     socket.join(roomId);
+    
+    // Get list of existing peers in the room
+    const peers = room
+      .filter(socketId => socketId !== socket.id)
+      .map(socketId => {
+        const userId = [...activeUsers.entries()]
+          .find(([_, sid]) => sid === socketId)?.[0];
+        return {
+          peerId: userId,
+          socketId: socketId
+        };
+      })
+      .filter(peer => peer.peerId);
+
+    // Notify the joining user about existing peers
+    socket.emit('joinedGroupCall', {
+      roomId,
+      peers
+    });
+
+    // Notify other users in the room about the new user
     socket.to(roomId).emit('newUserJoined', {
       peerId: socket.userId,
       newPeerId: activePeers.get(socket.userId)
     });
+
+    console.log('User joined room:', socket.userId, 'Room:', roomId, 'Peers:', peers);
   });
 
   // Signaling
