@@ -14,7 +14,11 @@ function connectSocket() {
     forceNew: true,
     path: '/socket.io/',
     secure: true,
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+    withCredentials: true,
+    extraHeaders: {
+      'X-Requested-With': 'XMLHttpRequest'
+    }
   });
 
   socket.on('connect', () => {
