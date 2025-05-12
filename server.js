@@ -77,7 +77,12 @@ const io = new Server(server, {
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
-  cookie: false,
+  cookie: {
+    name: 'io',
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax'
+  },
   allowUpgrades: true,
   maxHttpBufferSize: 1e8,
   connectTimeout: 45000,
@@ -88,6 +93,21 @@ const io = new Server(server, {
   httpCompression: {
     threshold: 2048
   }
+});
+
+// Add session recovery middleware
+io.use((socket, next) => {
+  const sessionId = socket.handshake.auth.sessionId;
+  if (sessionId) {
+    // Try to recover session
+    const userId = [...activeUsers.entries()]
+      .find(([_, sid]) => sid === sessionId)?.[0];
+    if (userId) {
+      socket.userId = userId;
+      socket.sessionId = sessionId;
+    }
+  }
+  next();
 });
 
 // Add error handling for the server
@@ -103,6 +123,9 @@ io.on('error', (error) => {
 // Add connection error handling
 io.engine.on('connection_error', (err) => {
   console.error('Connection error:', err);
+  if (err.code === 1) { // Session ID unknown
+    console.log('Attempting to recover session...');
+  }
 });
 
 // Trust proxy for Railway
