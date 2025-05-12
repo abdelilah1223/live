@@ -85,14 +85,22 @@
 /* Toast notifications */
 .toast {
     position: fixed;
-    bottom: 2rem;
-    right: 2rem;
-    padding: 1rem 2rem;
-    border-radius: 4px;
-    background-color: #333;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
     color: white;
-    animation: slideIn 0.3s ease-out;
+    padding: 12px 24px;
+    border-radius: 5px;
     z-index: 1000;
+    animation: fadeInOut 3s ease-in-out;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translate(-50%, 20px); }
+    10% { opacity: 1; transform: translate(-50%, 0); }
+    90% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -20px); }
 }
 
 /* Copy button animation */
@@ -141,4 +149,27 @@
 
 .disconnected {
     background-color: #ef4444;
+}
+
+.copy-link-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    transition: background-color 0.3s;
+    margin: 10px;
+}
+
+.copy-link-btn:hover {
+    background-color: #45a049;
+}
+
+.copy-link-btn i {
+    font-size: 16px;
 } 
