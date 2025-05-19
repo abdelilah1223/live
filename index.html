@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Portal</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+        
+        html.dark {
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+        
+        html.dark .bg-white {
+            background-color: #2d3748 !important;
+        }
+        
+        html.dark .text-gray-800 {
+            color: #e2e8f0 !important;
+        }
+        
+        html.dark .border-gray-200 {
+            border-color: #4a5568 !important;
+        }
+        
+        html.dark .shadow {
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.24);
+        }
+
+        html.dark .bg-gray-100 {
+            background-color: #2d3748 !important;
+        }
+
+        html.dark .text-gray-700 {
+            color: #e2e8f0 !important;
+        }
+
+        .carousel {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .carousel-inner {
+            display: flex;
+            transition: transform 0.5s ease;
+        }
+
+        .carousel-item {
+            flex: 0 0 100%;
+        }
+
+        .rtl {
+            direction: rtl;
+        }
+
+        .ltr {
+            direction: ltr;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans leading-normal tracking-normal" x-data="app()" :dir="language === 'ar' ? 'rtl' : 'ltr'">
+    <header class="bg-white shadow-md">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="flex items-center mb-4 md:mb-0">
+                    <h1 class="text-2xl font-bold text-blue-600" x-text="translations[language].siteName">News Portal</h1>
+                </div>
+                <nav class="flex flex-wrap justify-center md:justify-end space-x-4 rtl:space-x-reverse">
+                    <button @click="showHome()" class="px-3 py-2 text-gray-700 hover:text-blue-600 transition duration-300" x-text="translations[language].home">Home</button>
+                    <button @click="showSavedArticles()" class="px-3 py-2 text-gray-700 hover:text-blue-600 transition duration-300" x-text="translations[language].savedArticles">Saved Articles</button>
+                    <button @click="showOldArticles()" class="px-3 py-2 text-gray-700 hover:text-blue-600 transition duration-300" x-text="translations[language].oldArticles">Old Articles</button>
+                </nav>
+            </div>
+            <div class="mt-4 flex flex-col md:flex-row justify-between items-center">
+                <div class="flex items-center space-x-4 rtl:space-x-reverse mb-4 md:mb-0">
+                    <button @click="toggleDarkMode()" class="bg-gray-200 dark:bg-gray-700 p-2 rounded-full">
+                        <i :class="darkMode ? 'fas fa-sun' : 'fas fa-moon'" class="text-gray-800"></i>
+                    </button>
+                    <div class="relative">
+                        <select @change="changeCategory($event)" class="bg-white border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="all" x-text="translations[language].allCategories">All Categories</option>
+                            <template x-for="category in categories" :key="category">
+                                <option :value="category" x-text="category"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="relative">
+                        <select @change="changeLanguage($event)" class="bg-white border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="en">English</option>
+                            <option value="ar">العربية</option>
+                            <option value="fr">Français</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="relative w-full md:w-64">
+                    <input type="text" x-model="searchQuery" @input="searchArticles()" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" :placeholder="translations[language].search">
+                    <button class="absolute right-2 top-2 text-gray-500" @click="searchArticles()">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <!-- Date picker for old articles -->
+        <div x-show="view === 'oldArticles'" class="mb-8">
+            <div class="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-bold mb-4" x-text="translations[language].selectDate">Select Date</h2>
+                <input type="date" @change="loadArticlesByDate($event)" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" :max="today">
+            </div>
+        </div>
+
+        <!-- Home view -->
+        <div x-show="view === 'home'">
+            <!-- Main article -->
+            <div x-show="currentArticle" class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+                <div class="p-6">
+                    <h2 class="text-2xl font-bold mb-4" x-text="currentArticle?.translations?.[language]?.title || currentArticle?.title">Article Title</h2>
+                    
+                    <!-- Image carousel -->
+                    <div class="carousel mb-6 h-80 relative rounded-lg overflow-hidden">
+                        <div class="carousel-inner h-full" :style="`width: ${currentArticle?.images?.length * 100}%; transform: translateX(-${currentSlide * (100 / currentArticle?.images?.length)}%)`">
+                            <template x-for="(image, index) in currentArticle?.images || []" :key="index">
+                                <div class="carousel-item h-full">
+                                    <img :src="image" class="w-full h-full object-cover" alt="Article image">
+                                </div>
+                            </template>
+                        </div>
+                        <button @click="prevSlide()" class="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-2 focus:outline-none">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button @click="nextSlide()" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-2 focus:outline-none">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <div class="absolute bottom-2 left-0 right-0 flex justify-center space-x-2">
+                            <template x-for="(_, index) in currentArticle?.images || []" :key="index">
+                                <button @click="currentSlide = index" class="w-3 h-3 rounded-full focus:outline-none" :class="currentSlide === index ? 'bg-white' : 'bg-gray-400'"></button>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <div class="prose max-w-none mb-6">
+                        <p x-text="currentArticle?.translations?.[language]?.text || currentArticle?.text">Article content...</p>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center justify-between mb-6">
+                        <div>
+                            <p class="text-sm text-gray-600">
+                                <span x-text="translations[language].publishedOn">Published on</span>: 
+                                <span x-text="formatDate(currentArticle?.publish_date)"></span>
+                            </p>
+                            <p class="text-sm text-gray-600">
+                                <span x-text="translations[language].authors">Authors</span>: 
+                                <span x-text="currentArticle?.authors?.join(', ')"></span>
+                            </p>
+                        </div>
+                        <div class="flex mt-2 md:mt-0">
+                            <button @click="saveArticle(currentArticle)" class="flex items-center px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 mr-2">
+                                <i class="fas fa-bookmark mr-1"></i>
+                                <span x-text="translations[language].save">Save</span>
+                            </button>
+                            <button @click="shareArticle(currentArticle)" class="flex items-center px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 mr-2">
+                                <i class="fas fa-share-alt mr-1"></i>
+                                <span x-text="translations[language].share">Share</span>
+                            </button>
+                            <button @click="copyLink(currentArticle)" class="flex items-center px-3 py-1 bg-purple-500 text-white rounded-md hover:bg-purple-600 mr-2">
+                                <i class="fas fa-link mr-1"></i>
+                                <span x-text="translations[language].copyLink">Copy Link</span>
+                            </button>
+                            <button @click="downloadPDF(currentArticle)" class="flex items-center px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
+                                <i class="fas fa-file-pdf mr-1"></i>
+                                <span x-text="translations[language].downloadPDF">Download PDF</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="keyword in currentArticle?.keywords || []" :key="keyword">
+                            <span class="px-2 py-1 bg-gray-200 text-gray-800 text-sm rounded-full" x-text="keyword"></span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Related articles -->
+            <div>
+                <h3 class="text-xl font-bold mb-4" x-text="translations[language].relatedArticles">Related Articles</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <template x-for="(article, index) in relatedArticles.slice(0, showMoreCount)" :key="index">
+                        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                            <img :src="article.main_image || article.images?.[0]" class="w-full h-48 object-cover" alt="Article image">
+                            <div class="p-4">
+                                <h4 class="font-bold mb-2" x-text="article.translations?.[language]?.title || article.title"></h4>
+                                <p class="text-sm text-gray-600 mb-4" x-text="article.translations?.[language]?.summary || article.summary"></p>
+                                <button @click="setCurrentArticle(article)" class="text-blue-500 hover:underline" x-text="translations[language].readMore">Read More</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <div class="flex justify-center mt-6" x-show="relatedArticles.length > showMoreCount">
+                    <button @click="showMoreCount += 4" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600" x-text="translations[language].showMore">Show More</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Saved articles view -->
+        <div x-show="view === 'savedArticles'">
+            <h2 class="text-2xl font-bold mb-6" x-text="translations[language].savedArticles">Saved Articles</h2>
+            
+            <div x-show="!savedArticleDetail">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <template x-for="(article, index) in savedArticles" :key="index">
+                        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                            <img :src="article.main_image || article.images?.[0]" class="w-full h-48 object-cover" alt="Article image">
+                            <div class="p-4">
+                                <h3 class="font-bold mb-2" x-text="article.translations?.[language]?.title || article.title"></h3>
+                                <p class="text-sm text-gray-600 mb-2" x-text="formatDate(article.publish_date)"></p>
+                                <button @click="showSavedArticleDetail(article)" class="text-blue-500 hover:underline" x-text="translations[language].viewDetails">View Details</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <div x-show="savedArticles.length === 0" class="text-center py-8">
+                    <p class="text-lg text-gray-600" x-text="translations[language].noSavedArticles">No saved articles yet.</p>
+                </div>
+            </div>
+            
+            <div x-show="savedArticleDetail" class="bg-white rounded-lg shadow-md overflow-hidden">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-2xl font-bold" x-text="savedArticleDetail?.translations?.[language]?.title || savedArticleDetail?.title"></h3>
+                        <button @click="savedArticleDetail = null" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-arrow-left"></i> <span x-text="translations[language].back">Back</span>
+                        </button>
+                    </div>
+                    
+                    <div class="carousel mb-6 h-80 relative rounded-lg overflow-hidden">
+                        <div class="carousel-inner h-full" :style="`width: ${savedArticleDetail?.images?.length * 100}%; transform: translateX(-${savedDetailSlide * (100 / savedArticleDetail?.images?.length)}%)`">
+                            <template x-for="(image, index) in savedArticleDetail?.images || []" :key="index">
+                                <div class="carousel-item h-full">
+                                    <img :src="image" class="w-full h-full object-cover" alt="Article image">
+                                </div>
+                            </template>
+                        </div>
+                        <button @click="prevSavedDetailSlide()" class="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-2 focus:outline-none">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button @click="nextSavedDetailSlide()" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white rounded-full p-2 focus:outline-none">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="prose max-w-none mb-6">
+                        <p x-text="savedArticleDetail?.translations?.[language]?.text || savedArticleDetail?.text"></p>
+                    </div>
+                    
+                    <div class="flex flex-wrap justify-between mb-6">
+                        <div>
+                            <p class="text-sm text-gray-600">
+                                <span x-text="translations[language].publishedOn">Published on</span>: 
+                                <span x-text="formatDate(savedArticleDetail?.publish_date)"></span>
+                            </p>
+                        </div>
+                        <div class="flex mt-2 md:mt-0">
+                            <button @click="removeFromSaved(savedArticleDetail)" class="flex items-center px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 mr-2">
+                                <i class="fas fa-trash mr-1"></i>
+                                <span x-text="translations[language].remove">Remove</span>
+                            </button>
+                            <button @click="shareArticle(savedArticleDetail)" class="flex items-center px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 mr-2">
+                                <i class="fas fa-share-alt mr-1"></i>
+                                <span x-text="translations[language].share">Share</span>
+                            </button>
+                            <button @click="downloadPDF(savedArticleDetail)" class="flex items-center px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600">
+                                <i class="fas fa-file-pdf mr-1"></i>
+                                <span x-text="translations[language].downloadPDF">Download PDF</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="keyword in savedArticleDetail?.keywords || []" :key="keyword">
+                            <span class="px-2 py-1 bg-gray-200 text-gray-800 text-sm rounded-full" x-text="keyword"></span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white shadow-inner mt-8 py-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between">
+                <div class="mb-6 md:mb-0">
+                    <h3 class="text-xl font-bold mb-4" x-text="translations[language].siteName">News Portal</h3>
+                    <p class="text-gray-600" x-text="translations[language].footerDescription">Your source for the latest news and updates.</p>
+                </div>
+                <div>
+                    <h4 class="font-bold mb-3" x-text="translations[language].contactUs">Contact Us</h4>
+                    <div class="flex space-x-4 rtl:space-x-reverse">
+                        <a href="#" class="text-gray-600 hover:text-blue-600">
+                            <i class="fab fa-whatsapp text-2xl"></i>
+                        </a>
+                        <a href="#" class="text-gray-600 hover:text-blue-600">
+                            <i class="fab fa-instagram text-2xl"></i>
+                        </a>
+                        <a href="#" class="text-gray-600 hover:text-blue-600">
+                            <i class="fab fa-facebook text-2xl"></i>
+                        </a>
+                        <a href="#" class="text-gray-600 hover:text-blue-600">
+                            <i class="fas fa-envelope text-2xl"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-8 pt-4 border-t border-gray-200 text-center">
+                <p class="text-gray-600">© 2025 News Portal. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast notification -->
+    <div x-show="toast.show" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 transform translate-y-2" x-transition:enter-end="opacity-100 transform translate-y-0" x-transition:leave="transition ease-in duration-300" x-transition:leave-start="opacity-100 transform translate-y-0" x-transition:leave-end="opacity-0 transform translate-y-2" class="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg z-50" x-text="toast.message"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.10.3/cdn.min.js" defer></script>
+    <script>
+ function app() {
+    return {
+        view: 'home',
+        articles: [],
+        currentArticle: null,
+        currentSlide: 0,
+        savedArticleDetail: null,
+        savedDetailSlide: 0,
+        relatedArticles: [],
+        savedArticles: [],
+        searchQuery: '',
+        showMoreCount: 8,
+        darkMode: localStorage.getItem('darkMode') === 'true',
+        language: localStorage.getItem('language') || 'en',
+        selectedCategory: localStorage.getItem('category') || 'all',
+        categories: ['technology', 'sports', 'science', 'ai', 'cars', 'finance'],
+        today: new Date().toISOString().split('T')[0],
+        jsonFileName: '', // Store the current JSON filename
+        toast: {
+            show: false,
+            message: ''
+        },
+        translations: {
+            en: {
+                siteName: 'News Portal',
+                home: 'Home',
+                savedArticles: 'Saved Articles',
+                oldArticles: 'Old Articles',
+                allCategories: 'All Categories',
+                search: 'Search articles...',
+                publishedOn: 'Published on',
+                authors: 'Authors',
+                save: 'Save',
+                share: 'Share',
+                copyLink: 'Copy Link',
+                downloadPDF: 'Download PDF',
+                relatedArticles: 'Related Articles',
+                readMore: 'Read More',
+                viewDetails: 'View Details',
+                noSavedArticles: 'No saved articles yet.',
+                back: 'Back',
+                remove: 'Remove',
+                selectDate: 'Select a date to view articles',
+                contactUs: 'Contact Us',
+                footerDescription: 'Your source for the latest news and updates.',
+                showMore: 'Show More',
+                articleSaved: 'Article saved!',
+                alreadySaved: 'Article already saved!',
+                articleRemoved: 'Article removed!',
+                linkCopied: 'Link copied to clipboard!',
+                preparingPDF: 'Preparing PDF for download...',
+                pdfDownloaded: 'PDF downloaded!',
+                noArticlesFound: 'No articles found for this date.',
+                errorLoadingArticles: 'Error loading articles.'
+            },
+            ar: {
+                siteName: 'بوابة الأخبار',
+                home: 'الرئيسية',
+                savedArticles: 'المقالات المحفوظة',
+                oldArticles: 'مقالات قديمة',
+                allCategories: 'جميع الفئات',
+                search: 'بحث في المقالات...',
+                publishedOn: 'نُشر في',
+                authors: 'المؤلفون',
+                save: 'حفظ',
+                share: 'مشاركة',
+                copyLink: 'نسخ الرابط',
+                downloadPDF: 'تحميل PDF',
+                relatedArticles: 'مقالات ذات صلة',
+                readMore: 'قراءة المزيد',
+                viewDetails: 'عرض التفاصيل',
+                noSavedArticles: 'لا توجد مقالات محفوظة بعد.',
+                back: 'رجوع',
+                remove: 'إزالة',
+                selectDate: 'حدد تاريخًا لعرض المقالات',
+                contactUs: 'اتصل بنا',
+                footerDescription: 'مصدرك للأخبار والتحديثات الأخيرة.',
+                showMore: 'عرض المزيد',
+                articleSaved: 'تم حفظ المقال!',
+                alreadySaved: 'المقال محفوظ بالفعل!',
+                articleRemoved: 'تمت إزالة المقال!',
+                linkCopied: 'تم نسخ الرابط إلى الحافظة!',
+                preparingPDF: 'جارٍ تحضير ملف PDF للتنزيل...',
+                pdfDownloaded: 'تم تنزيل ملف PDF!',
+                noArticlesFound: 'لم يتم العثور على مقالات لهذا التاريخ.',
+                errorLoadingArticles: 'خطأ في تحميل المقالات.'
+            },
+            fr: {
+                siteName: 'Portail d\'actualités',
+                home: 'Accueil',
+                savedArticles: 'Articles enregistrés',
+                oldArticles: 'Anciens articles',
+                allCategories: 'Toutes les catégories',
+                search: 'Rechercher des articles...',
+                publishedOn: 'Publié le',
+                authors: 'Auteurs',
+                save: 'Enregistrer',
+                share: 'Partager',
+                copyLink: 'Copier le lien',
+                downloadPDF: 'Télécharger PDF',
+                relatedArticles: 'Articles connexes',
+                readMore: 'Lire plus',
+                viewDetails: 'Voir les détails',
+                noSavedArticles: 'Pas encore d\'articles enregistrés.',
+                back: 'Retour',
+                remove: 'Supprimer',
+                selectDate: 'Sélectionnez une date pour voir les articles',
+                contactUs: 'Contactez-nous',
+                footerDescription: 'Votre source pour les dernières nouvelles et mises à jour.',
+                showMore: 'Afficher plus',
+                articleSaved: 'Article enregistré!',
+                alreadySaved: 'Article déjà enregistré!',
+                articleRemoved: 'Article supprimé!',
+                linkCopied: 'Lien copié dans le presse-papiers!',
+                preparingPDF: 'Préparation du PDF pour le téléchargement...',
+                pdfDownloaded: 'PDF téléchargé!',
+                noArticlesFound: 'Aucun article trouvé pour cette date.',
+                errorLoadingArticles: 'Erreur lors du chargement des articles.'
+            }
+        },
+        
+        init() {
+            // Set dark mode
+            if (this.darkMode) {
+                document.documentElement.classList.add('dark');
+            }
+            
+            // Load saved articles from localStorage
+            const savedArticlesString = localStorage.getItem('savedArticles');
+            if (savedArticlesString) {
+                try {
+                    this.savedArticles = JSON.parse(savedArticlesString);
+                } catch (error) {
+                    console.error('Error parsing saved articles:', error);
+                    this.savedArticles = [];
+                    localStorage.setItem('savedArticles', JSON.stringify([]));
+                }
+            }
+            
+            // Check URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const jsonFile = urlParams.get('file');
+            const title = urlParams.get('title');
+            
+            if (jsonFile && title) {
+                this.loadArticleByFileAndTitle(jsonFile, title);
+            } else {
+                this.loadTodayArticles();
+            }
+            
+            // Set language direction
+            this.updateDirection();
+        },
+        
+        updateDirection() {
+            document.body.dir = this.language === 'ar' ? 'rtl' : 'ltr';
+        },
+        
+        loadTodayArticles() {
+            const today = new Date().toISOString().split('T')[0];
+            const fileName = `articles_${today}.json`;
+            this.fetchArticles(fileName);
+        },
+        
+        fetchArticles(fileName) {
+            // Store the current JSON filename
+            this.jsonFileName = fileName;
+            
+            // Return a promise for chainability
+            return new Promise((resolve, reject) => {
+                // Demo: Using a relative path to the articles folder
+                const filePath = `articles/${fileName}`;
+                
+                fetch(filePath)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Articles not found');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        this.articles = data;
+                        this.filterArticlesByCategory();
+                        resolve(data);
+                    })
+                    .catch(error => {
+                        console.error('Error loading articles:', error);
+                        this.showToast(this.translations[this.language].noArticlesFound);
+                        // For demo - load sample data
+                        this.loadSampleData();
+                        resolve(this.articles); // Resolve with sample data
+                    });
+            });
+        },
+        
+        loadSampleData() {
+            // Demo data based on the provided JSON example
+            this.articles = [
+                {
+                    "title": "Startup and Technology News",
+                    "text": "Forerunner has seen a number of high-profile successes, showing an ability to get ahead of consumer trends. We spoke with founder and Managing Partner Kirsten Green during a StrictlyVC event in San Francisco to find out how.",
+                    "summary": "Forerunner has seen a number of high-profile successes, showing an ability to get ahead of consumer trends.\nWe spoke with founder and Managing Partner Kirsten Green during a StrictlyVC event in San Francisco to find out how.",
+                    "keywords": [
+                        "trends", "partner", "managing", "startup", "showing", "seen",
+                        "technology", "san", "successes", "spoke", "strictlyvc", "number"
+                    ],
+                    "images": [
+                        "/api/placeholder/800/400",
+                        "/api/placeholder/800/400",
+                        "/api/placeholder/800/400",
+                        "/api/placeholder/800/400"
+                    ],
+                    "original_url": "https://techcrunch.com",
+                    "publish_date": "2025-04-30T22:19:55.788643",
+                    "authors": [
+                        "Kyle Wiggers", "Amanda Silberling", "Lorenzo Franceschi-Bicchierai"
+                    ],
+                    "category": "technology",
+                    "detected_language": "en",
+                    "relevance_score": 100,
+                    "freshness_score": 100,
+                    "truncated": false,
+                    "main_image": "/api/placeholder/800/400",
+                    "source_priority": 9,
+                    "total_score": 100.0,
+                    "language": "en",
+                    "translations": {
+                        "en": {
+                            "title": "Startup and Technology News",
+                            "text": "Forerunner has seen a number of high-profile successes, showing an ability to get ahead of consumer trends. We spoke with founder and Managing Partner Kirsten Green during a StrictlyVC event in San Francisco to find out how.",
+                            "summary": "Forerunner has seen a number of high-profile successes, showing an ability to get ahead of consumer trends."
+                        },
+                        "ar": {
+                            "title": "أخبار بدء التشغيل والتكنولوجيا",
+                            "text": "شهد Forerunner عددًا من النجاحات البارزة ، مما يدل على القدرة على التقدم في اتجاهات المستهلك.تحدثنا مع المؤسس والشريك الإداري Kirsten Green خلال حدث StrictlyVC في سان فرانسيسكو لمعرفة كيف.",
+                            "summary": "شهد Forerunner عددًا من النجاحات البارزة ، مما يدل على القدرة على التقدم في اتجاهات المستهلك."
+                        },
+                        "fr": {
+                            "title": "Actualités des startups et de la technologie",
+                            "text": "ForeRunner a connu un certain nombre de succès de haut niveau, montrant la capacité de devancer les tendances des consommateurs.Nous avons parlé avec le fondateur et associé directeur Kirsten Green lors d'un événement strictementvc à San Francisco pour savoir comment.",
+                            "summary": "ForeRunner a connu un certain nombre de succès de haut niveau, montrant la capacité de devancer les tendances des consommateurs."
+                        }
+                    }
+                },
+                // Other sample articles would be here
+            ];
+            
+            if (this.articles.length > 0) {
+                this.currentArticle = this.articles[0];
+                this.setRelatedArticles();
+                this.jsonFileName = `https://abdelilah1223.github.io/news-articles/articles_${new Date().toISOString().split('T')[0]}.json`; // Default filename for sample data
+            }
+        },
+        
+        // Format date to locale string
+        formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString(this.language === 'en' ? 'en-US' : 
+                                           this.language === 'ar' ? 'ar-SA' : 'fr-FR', 
+                                          { year: 'numeric', month: 'long', day: 'numeric' });
+        },
+        
+        // Toggle dark mode
+        toggleDarkMode() {
+            this.darkMode = !this.darkMode;
+            localStorage.setItem('darkMode', this.darkMode);
+            
+            if (this.darkMode) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        },
+        
+        // Change language
+        changeLanguage(event) {
+            this.language = event.target.value;
+            localStorage.setItem('language', this.language);
+            this.updateDirection();
+        },
+        
+        // Change category
+        changeCategory(event) {
+            this.selectedCategory = event.target.value;
+            localStorage.setItem('category', this.selectedCategory);
+            this.filterArticlesByCategory();
+        },
+        
+        // Filter articles by selected category
+        filterArticlesByCategory() {
+            if (this.selectedCategory === 'all') {
+                // If showing all articles, pick the first one
+                if (this.articles.length > 0) {
+                    this.setCurrentArticle(this.articles[0]);
+                }
+            } else {
+                // Find articles in the selected category
+                const filteredArticles = this.articles.filter(article => article.category === this.selectedCategory);
+                
+                if (filteredArticles.length > 0) {
+                    this.setCurrentArticle(filteredArticles[0]);
+                } else if (this.articles.length > 0) {
+                    // If no articles in the category, show the first available
+                    this.setCurrentArticle(this.articles[0]);
+                }
+            }
+            
+            this.setRelatedArticles();
+        },
+        
+        // Set current article and reset carousel
+        setCurrentArticle(article) {
+            this.currentArticle = article;
+            this.currentSlide = 0;
+            this.setRelatedArticles();
+            
+            // Update URL without page reload
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('file', this.jsonFileName);
+            newUrl.searchParams.set('title', article.title);
+            window.history.pushState({}, '', newUrl);
+        },
+        
+        // Find related articles based on keywords and category
+        setRelatedArticles() {
+            if (!this.currentArticle) {
+                this.relatedArticles = [];
+                return;
+            }
+            
+            // Get keywords from current article
+            const keywords = this.currentArticle.keywords || [];
+            const category = this.currentArticle.category;
+            
+            // Filter articles that aren't the current one
+            let related = this.articles.filter(article => article !== this.currentArticle);
+            
+            // Sort by relevance (keyword matches and same category)
+            related.sort((a, b) => {
+                const aKeywords = a.keywords || [];
+                const bKeywords = b.keywords || [];
+                
+                // Count matching keywords
+                const aMatches = keywords.filter(keyword => aKeywords.includes(keyword)).length;
+                const bMatches = keywords.filter(keyword => bKeywords.includes(keyword)).length;
+                
+                // Bonus for same category
+                const aBonus = a.category === category ? 10 : 0;
+                const bBonus = b.category === category ? 10 : 0;
+                
+                return (bMatches + bBonus) - (aMatches + aBonus);
+            });
+            
+            this.relatedArticles = related;
+        },
+        
+        // Next slide in carousel
+        nextSlide() {
+            if (!this.currentArticle || !this.currentArticle.images) return;
+            if (this.currentSlide < this.currentArticle.images.length - 1) {
+                this.currentSlide++;
+            } else {
+                this.currentSlide = 0;
+            }
+        },
+        
+        // Previous slide in carousel
+        prevSlide() {
+            if (!this.currentArticle || !this.currentArticle.images) return;
+            if (this.currentSlide > 0) {
+                this.currentSlide--;
+            } else {
+                this.currentSlide = this.currentArticle.images.length - 1;
+            }
+        },
+        
+        // Next slide in saved article detail
+        nextSavedDetailSlide() {
+            if (!this.savedArticleDetail || !this.savedArticleDetail.images) return;
+            if (this.savedDetailSlide < this.savedArticleDetail.images.length - 1) {
+                this.savedDetailSlide++;
+            } else {
+                this.savedDetailSlide = 0;
+            }
+        },
+        
+        // Previous slide in saved article detail
+        prevSavedDetailSlide() {
+            if (!this.savedArticleDetail || !this.savedArticleDetail.images) return;
+            if (this.savedDetailSlide > 0) {
+                this.savedDetailSlide--;
+            } else {
+                this.savedDetailSlide = this.savedArticleDetail.images.length - 1;
+            }
+        },
+        
+        // Save article to localStorage - FIXED FUNCTION
+        saveArticle(article) {
+            // First check if article is null or undefined
+            if (!article) {
+                console.error('Cannot save null article');
+                this.showToast('Error: No article to save');
+                return;
+            }
+            
+            // Check if the article has a title (necessary property)
+            if (!article.title) {
+                console.error('Cannot save article without title');
+                this.showToast('Error: Article is missing title');
+                return;
+            }
+            
+            // Check if article is already saved
+            const exists = this.savedArticles.some(saved => 
+                saved.title === article.title && 
+                saved.publish_date === article.publish_date
+            );
+            
+            if (!exists) {
+                // Create a deep copy of the article to avoid reference issues
+                const articleCopy = JSON.parse(JSON.stringify(article));
+                this.savedArticles.push(articleCopy);
+                
+                try {
+                    localStorage.setItem('savedArticles', JSON.stringify(this.savedArticles));
+                    this.showToast(this.translations[this.language].articleSaved);
+                } catch (error) {
+                    console.error('Error saving article to localStorage:', error);
+                    this.showToast('Error saving article. Storage may be full.');
+                }
+            } else {
+                this.showToast(this.translations[this.language].alreadySaved);
+            }
+        },
+        
+        // Remove article from saved list
+        removeFromSaved(article) {
+            if (!article) return;
+            
+            this.savedArticles = this.savedArticles.filter(saved => 
+                !(saved.title === article.title && saved.publish_date === article.publish_date)
+            );
+            
+            localStorage.setItem('savedArticles', JSON.stringify(this.savedArticles));
+            this.savedArticleDetail = null;
+            this.showToast(this.translations[this.language].articleRemoved);
+        },
+        
+        // Show saved article details
+        showSavedArticleDetail(article) {
+            this.savedArticleDetail = article;
+            this.savedDetailSlide = 0;
+        },
+        
+        // Share article - FIXED FUNCTION
+        shareArticle(article) {
+            if (!article) {
+                console.error('Cannot share null article');
+                this.showToast('Error: No article to share');
+                return;
+            }
+            
+            if (!article.title) {
+                console.error('Cannot share article without title');
+                this.showToast('Error: Article is missing title');
+                return;
+            }
+            
+            const url = `${window.location.origin}${window.location.pathname}?file=${encodeURIComponent(this.jsonFileName)}&title=${encodeURIComponent(article.title)}`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: article.translations?.[this.language]?.title || article.title,
+                    text: article.translations?.[this.language]?.summary || article.summary,
+                    url: url
+                }).catch(err => console.error('Error sharing:', err));
+            } else {
+                this.copyToClipboard(url);
+                this.showToast(this.translations[this.language].linkCopied);
+            }
+        },
+        
+        // Copy link to clipboard with JSON filename - FIXED FUNCTION
+        copyLink(article) {
+            if (!article || !article.title) {
+                console.error('Cannot copy link for invalid article');
+                this.showToast('Error: Invalid article link');
+                return;
+            }
+            
+            const url = `${window.location.origin}${window.location.pathname}?file=${encodeURIComponent(this.jsonFileName)}&title=${encodeURIComponent(article.title)}`;
+            
+            this.copyToClipboard(url);
+            this.showToast(this.translations[this.language].linkCopied);
+        },
+        
+        // Helper function to copy to clipboard
+        copyToClipboard(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text)
+                    .catch(err => console.error('Could not copy text: ', err));
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                
+                try {
+                    document.execCommand('copy');
+                } catch (err) {
+                    console.error('Error copying to clipboard:', err);
+                }
+                
+                document.body.removeChild(textarea);
+            }
+        },
+        
+        // Download article as PDF - FIXED FUNCTION
+        downloadPDF(article) {
+            if (!article || !article.title) {
+                console.error('Cannot download PDF for invalid article');
+                this.showToast('Error: Invalid article for PDF');
+                return;
+            }
+            
+            this.showToast(this.translations[this.language].preparingPDF);
+            
+            // Create a hidden iframe to generate PDF content
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            
+            // Set up iframe document content
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            iframeDoc.open();
+            
+            // Create a simple styled document with article content
+            const articleTitle = article.translations?.[this.language]?.title || article.title;
+            const articleText = article.translations?.[this.language]?.text || article.text;
+            const articleDate = this.formatDate(article.publish_date);
+            const articleAuthors = article.authors?.join(', ');
+            
+            iframeDoc.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>${articleTitle}</title>
+                    <style>
+                        body {
+                            font-family: Arial, sans-serif;
+                            margin: 40px;
+                            line-height: 1.6;
+                        }
+                        h1 {
+                            font-size: 24px;
+                            margin-bottom: 10px;
+                        }
+                        .metadata {
+                            font-size: 14px;
+                            color: #666;
+                            margin-bottom: 20px;
+                        }
+                        .content {
+                            margin-top: 30px;
+                        }
+                        .footer {
+                            margin-top: 50px;
+                            font-size: 12px;
+                            color: #999;
+                            text-align: center;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>${articleTitle}</h1>
+                    <div class="metadata">
+                        <div>${this.translations[this.language].publishedOn}: ${articleDate}</div>
+                        <div>${this.translations[this.language].authors}: ${articleAuthors}</div>
+                    </div>
+                    <div class="content">
+                        ${articleText}
+                    </div>
+                    <div class="footer">
+                        © ${new Date().getFullYear()} News Portal - ${this.translations[this.language].siteName}
+                    </div>
+                </body>
+                </html>
+            `);
+            
+            iframeDoc.close();
+            
+            // Use window.print() to trigger the print dialog (which can save as PDF)
+            setTimeout(() => {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+                
+                // Remove the iframe after print dialog is shown
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                    this.showToast(this.translations[this.language].pdfDownloaded);
+                }, 1000);
+            }, 500);
+        },
+        
+        // Show home view
+        showHome() {
+            this.view = 'home';
+            this.savedArticleDetail = null;
+        },
+        
+        // Show saved articles
+        showSavedArticles() {
+            this.view = 'savedArticles';
+            this.savedArticleDetail = null;
+        },
+        
+        // Show old articles view with date picker
+        showOldArticles() {
+            this.view = 'oldArticles';
+            this.savedArticleDetail = null;
+        },
+        
+        // Load articles by selected date
+        loadArticlesByDate(event) {
+            const selectedDate = event.target.value;
+            if (selectedDate) {
+                const fileName = `articles_${selectedDate}.json`;
+                this.fetchArticles(fileName);
+                this.view = 'home';
+            }
+        },
+        
+        // Load article by file and title (from URL params)
+        loadArticleByFileAndTitle(jsonFile, title) {
+            // Now properly chaining with the Promise from fetchArticles
+            this.fetchArticles(jsonFile)
+                .then(() => {
+                    const decodedTitle = decodeURIComponent(title);
+                    const targetArticle = this.articles.find(article => article.title === decodedTitle);
+                    
+                    if (targetArticle) {
+                        this.setCurrentArticle(targetArticle);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading article:', error);
+                    this.showToast(this.translations[this.language].errorLoadingArticles);
+                });
+        },
+        
+        // Search articles by title or content
+        searchArticles() {
+            if (!this.searchQuery.trim()) {
+                this.filterArticlesByCategory();
+                return;
+            }
+            
+            const query = this.searchQuery.toLowerCase();
+            
+            const results = this.articles.filter(article => {
+                const title = article.translations?.[this.language]?.title || article.title;
+                const text = article.translations?.[this.language]?.text || article.text;
+                const summary = article.translations?.[this.language]?.summary || article.summary;
+                const keywords = article.keywords || [];
+                
+                return (
+                    title.toLowerCase().includes(query) ||
+                    text.toLowerCase().includes(query) ||
+                    summary.toLowerCase().includes(query) ||
+                    keywords.some(keyword => keyword.toLowerCase().includes(query))
+                );
+            });
+            
+            if (results.length > 0) {
+                this.currentArticle = results[0];
+                this.setRelatedArticles();
+            }
+        },
+        
+        // Show toast notification
+        showToast(message, duration = 3000) {
+            this.toast.message = message;
+            this.toast.show = true;
+            
+            setTimeout(() => {
+                this.toast.show = false;
+            }, duration);
+        }
+    };
+}
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', () => {
+            const appInstance = app();
+            appInstance.init();
+            window.app = appInstance; // Make it globally accessible for debugging
+        });
+    </script>
+</body>
+</html>
