@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Matrix Cipher | Split & Merge Image Tool</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- LZ-string for advanced lossless compression -->
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+    <!-- FileSaver.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        .tab-active {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 10px -2px rgba(0,0,0,0.1);
+        }
+        .tab-inactive {
+            background-color: #e2e8f0;
+            color: #1e293b;
+        }
+        .card {
+            backdrop-filter: blur(2px);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -12px rgba(0,0,0,0.15);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-black bg-gradient-to-r from-indigo-700 to-purple-700 bg-clip-text text-transparent">🗝️ Matrix Cipher</h1>
+            <p class="text-gray-700 mt-2">Split image → Compress + Encrypt matrix → Merge with secret key</p>
+            <div class="w-20 h-1 bg-indigo-500 mx-auto rounded-full mt-3"></div>
+        </div>
+
+        <!-- Tab Buttons -->
+        <div class="flex justify-center gap-4 mb-8">
+            <button id="splitTabBtn" class="tab-active px-8 py-3 rounded-xl font-bold text-lg transition-all flex items-center gap-2 shadow-md">🧩 SPLIT & ENCRYPT</button>
+            <button id="mergeTabBtn" class="tab-inactive px-8 py-3 rounded-xl font-bold text-lg transition-all flex items-center gap-2 shadow-sm">🔗 MERGE & DECRYPT</button>
+        </div>
+
+        <!-- ==================== SPLIT PANEL ==================== -->
+        <div id="splitPanel" class="card bg-white rounded-2xl shadow-xl overflow-hidden transition-all">
+            <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 px-6 py-4">
+                <h2 class="text-2xl font-bold text-white">📸 Step 1: Decompose Image</h2>
+                <p class="text-indigo-100 text-sm">Upload image (max 5MB) → Provide secret key → Download compressed+encrypted matrix file</p>
+            </div>
+            <div class="p-6 space-y-5">
+                <div>
+                    <label class="block text-gray-800 font-semibold mb-2">🖼️ Select Image (JPG, PNG, WEBP)</label>
+                    <input type="file" id="splitImage" accept="image/jpeg,image/png,image/webp" class="w-full border-2 border-gray-200 rounded-xl p-2.5 bg-gray-50">
+                    <p id="sizeWarning" class="text-red-500 text-xs mt-1 hidden">❌ File exceeds 5MB limit.</p>
+                </div>
+                <div>
+                    <label class="block text-gray-800 font-semibold mb-2">🔑 Encryption Key (Secret)</label>
+                    <input type="text" id="encryptKey" placeholder="e.g., MyStrongKey2024" class="w-full border-2 border-gray-200 rounded-xl p-2.5 bg-gray-50 font-mono">
+                </div>
+                <button id="splitBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-lg shadow-md">
+                    ⚡ COMPRESS & ENCRYPT MATRIX
+                </button>
+                <div id="splitResult" class="hidden mt-4 p-4 bg-green-50 rounded-xl border border-green-200">
+                    <div class="flex flex-wrap justify-between items-center gap-3">
+                        <span class="font-bold text-green-800">✅ Matrix encrypted & compressed successfully!</span>
+                        <button id="downloadMatrixFileBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg flex items-center gap-2 shadow transition">💾 Download .matrix file</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-3">✔ File size is tiny (lossless LZ compression + XOR encryption).<br>✔ Keep the key! You'll need it for reconstruction.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== MERGE PANEL ==================== -->
+        <div id="mergePanel" class="hidden card bg-white rounded-2xl shadow-xl overflow-hidden transition-all">
+            <div class="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-4">
+                <h2 class="text-2xl font-bold text-white">🔄 Step 2: Reconstruct Image</h2>
+                <p class="text-emerald-100 text-sm">Upload the .matrix file → Enter decryption key → Get original image back</p>
+            </div>
+            <div class="p-6 space-y-5">
+                <div>
+                    <label class="block text-gray-800 font-semibold mb-2">📁 Upload Encrypted Matrix File (.matrix)</label>
+                    <input type="file" id="matrixFileInput" accept=".matrix,application/octet-stream" class="w-full border-2 border-gray-200 rounded-xl p-2.5 bg-gray-50">
+                    <p class="text-xs text-gray-400 mt-1">The file generated from "Split & Encrypt" section.</p>
+                </div>
+                <div>
+                    <label class="block text-gray-800 font-semibold mb-2">🔓 Decryption Key (same as encryption key)</label>
+                    <input type="text" id="decryptKey" placeholder="Enter the secret key used for encryption" class="w-full border-2 border-gray-200 rounded-xl p-2.5 bg-gray-50 font-mono">
+                </div>
+                <button id="mergeBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-lg shadow-md">
+                    🔓 DECRYPT & RESTORE IMAGE
+                </button>
+                <div id="mergeResult" class="hidden mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <p class="font-bold text-gray-800 mb-2">✨ Restored Image:</p>
+                    <div class="flex justify-center bg-white p-3 rounded-lg">
+                        <img id="restoredImg" class="max-w-full max-h-64 rounded-md shadow object-contain" alt="Restored">
+                    </div>
+                    <button id="downloadRestoredBtn" class="mt-4 w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition">💾 Download Restored Image</button>
+                </div>
+            </div>
+        </div>
+
+        <footer class="text-center text-gray-500 text-xs mt-8 border-t pt-5">
+            Lossless LZ compression + XOR cipher | No huge text blobs — binary .matrix files only | Fast & reliable
+        </footer>
+    </div>
+
+    <script>
+        (function() {
+            // ---------- DOM elements ----------
+            const splitTab = document.getElementById('splitTabBtn');
+            const mergeTab = document.getElementById('mergeTabBtn');
+            const splitPanel = document.getElementById('splitPanel');
+            const mergePanel = document.getElementById('mergePanel');
+            
+            const splitImageInput = document.getElementById('splitImage');
+            const encryptKeyInput = document.getElementById('encryptKey');
+            const splitBtn = document.getElementById('splitBtn');
+            const sizeWarning = document.getElementById('sizeWarning');
+            const splitResultDiv = document.getElementById('splitResult');
+            const downloadMatrixBtn = document.getElementById('downloadMatrixFileBtn');
+            
+            const matrixFileInput = document.getElementById('matrixFileInput');
+            const decryptKeyInput = document.getElementById('decryptKey');
+            const mergeBtn = document.getElementById('mergeBtn');
+            const mergeResultDiv = document.getElementById('mergeResult');
+            const restoredImg = document.getElementById('restoredImg');
+            const downloadRestoredBtn = document.getElementById('downloadRestoredBtn');
+            
+            const MAX_SIZE = 5 * 1024 * 1024;
+            
+            // ---------- Helper functions ----------
+            function xorEncryptDecrypt(dataStr, keyStr) {
+                let result = '';
+                const keyLen = keyStr.length;
+                for (let i = 0; i < dataStr.length; i++) {
+                    result += String.fromCharCode(dataStr.charCodeAt(i) ^ keyStr.charCodeAt(i % keyLen));
+                }
+                return result;
+            }
+            
+            // Convert Uint8Array to binary string (latin1)
+            function uint8ToBinary(uint8) {
+                let bin = '';
+                for (let i = 0; i < uint8.length; i++) bin += String.fromCharCode(uint8[i]);
+                return bin;
+            }
+            function binaryToUint8(binStr) {
+                const len = binStr.length;
+                const arr = new Uint8Array(len);
+                for (let i = 0; i < len; i++) arr[i] = binStr.charCodeAt(i) & 0xFF;
+                return arr;
+            }
+            
+            // Advanced compression: LZ-string (lossless, fast, perfect for matrices)
+            function compressToBase64(uint8) {
+                const binaryStr = uint8ToBinary(uint8);
+                return LZString.compressToBase64(binaryStr);
+            }
+            function decompressFromBase64(b64) {
+                const decompressedBin = LZString.decompressFromBase64(b64);
+                if (!decompressedBin) throw new Error("LZ decompression failed — data corrupted or wrong key?");
+                return binaryToUint8(decompressedBin);
+            }
+            
+            // Convert image file to raw RGBA pixel array + metadata
+            function imageToPixelMatrix(file) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    const url = URL.createObjectURL(file);
+                    img.onload = () => {
+                        URL.revokeObjectURL(url);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                        const rgba = new Uint8Array(imageData.data);
+                        resolve({
+                            pixels: rgba,
+                            width: img.width,
+                            height: img.height
+                        });
+                    };
+                    img.onerror = () => reject(new Error("Failed to load image"));
+                    img.src = url;
+                });
+            }
+            
+            // Rebuild image from RGBA array
+            function pixelsToImage(pixels, width, height) {
+                return new Promise((resolve, reject) => {
+                    if (pixels.length !== width * height * 4) {
+                        reject(new Error(`Pixel length mismatch: ${pixels.length} vs expected ${width*height*4}`));
+                        return;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    const imgData = new ImageData(new Uint8ClampedArray(pixels), width, height);
+                    ctx.putImageData(imgData, 0, 0);
+                    canvas.toBlob(blob => {
+                        if (blob) resolve(URL.createObjectURL(blob));
+                        else reject("Canvas to blob failed");
+                    }, 'image/png');
+                });
+            }
+            
+            // ---------- SPLIT: compress + encrypt then save as binary .matrix file ----------
+            splitBtn.addEventListener('click', async () => {
+                const file = splitImageInput.files[0];
+                if (!file) { alert("Please select an image."); return; }
+                if (file.size > MAX_SIZE) { sizeWarning.classList.remove('hidden'); return; }
+                sizeWarning.classList.add('hidden');
+                
+                const key = encryptKeyInput.value.trim();
+                if (!key) { alert("Encryption key is required."); return; }
+                
+                splitBtn.disabled = true;
+                splitBtn.innerHTML = "⏳ Processing matrix...";
+                
+                try {
+                    // 1. Extract pixel matrix + dimensions
+                    const { pixels, width, height } = await imageToPixelMatrix(file);
+                    
+                    // 2. Build full payload: header (dimensions + orientation) + raw pixels
+                    const header = { w: width, h: height, dir: "row-major", se: "TL-BR", ver: "2.0" };
+                    const headerStr = JSON.stringify(header);
+                    const headerBytes = new TextEncoder().encode(headerStr);
+                    const headerLen = headerBytes.length;
+                    
+                    const fullPayload = new Uint8Array(4 + headerLen + pixels.length);
+                    new DataView(fullPayload.buffer).setUint32(0, headerLen, false);
+                    fullPayload.set(headerBytes, 4);
+                    fullPayload.set(pixels, 4 + headerLen);
+                    
+                    // 3. Compress (lossless LZ) -> Base64 string
+                    const compressedBase64 = compressToBase64(fullPayload);
+                    
+                    // 4. Encrypt the compressed string (XOR after compression)
+                    const encryptedStr = xorEncryptDecrypt(compressedBase64, key);
+                    
+                    // 5. Convert encrypted string to binary Uint8Array (for saving as file)
+                    const encryptedBinary = new TextEncoder().encode(encryptedStr);
+                    
+                    // 6. Save as .matrix file (no huge text, pure binary)
+                    const blob = new Blob([encryptedBinary], { type: "application/octet-stream" });
+                    saveAs(blob, `matrix_${Date.now()}.matrix`);
+                    
+                    splitResultDiv.classList.remove('hidden');
+                } catch (err) {
+                    console.error(err);
+                    alert("Error during split: " + err.message);
+                } finally {
+                    splitBtn.disabled = false;
+                    splitBtn.innerHTML = "⚡ COMPRESS & ENCRYPT MATRIX";
+                }
+            });
+            
+            // Download button in result is just informational (already auto-downloaded). 
+            // But user can download again if needed: we re-use last processed data? Simpler: we just re-trigger same process? 
+            // Actually the splitBtn already saves file. So we keep downloadMatrixBtn as optional: show message.
+            downloadMatrixBtn.addEventListener('click', () => {
+                alert("The .matrix file was automatically downloaded when you clicked 'COMPRESS & ENCRYPT'. If you lost it, please re-run the split process.");
+            });
+            
+            // ---------- MERGE: load .matrix file, decrypt, decompress, rebuild image ----------
+            mergeBtn.addEventListener('click', async () => {
+                const file = matrixFileInput.files[0];
+                if (!file) { alert("Please upload the .matrix file."); return; }
+                const key = decryptKeyInput.value.trim();
+                if (!key) { alert("Decryption key is required."); return; }
+                
+                mergeBtn.disabled = true;
+                mergeBtn.innerHTML = "⏳ Decrypting & reconstructing...";
+                
+                try {
+                    // 1. Read file as binary array buffer
+                    const arrayBuffer = await file.arrayBuffer();
+                    const encryptedBinary = new Uint8Array(arrayBuffer);
+                    
+                    // 2. Convert encrypted binary to string (the encrypted compressed base64)
+                    const encryptedStr = new TextDecoder().decode(encryptedBinary);
+                    
+                    // 3. Decrypt using XOR
+                    let compressedBase64;
+                    try {
+                        compressedBase64 = xorEncryptDecrypt(encryptedStr, key);
+                    } catch (e) {
+                        throw new Error("Decryption failed — wrong key or corrupted file.");
+                    }
+                    
+                    // 4. Decompress using LZ
+                    let fullPayload;
+                    try {
+                        fullPayload = decompressFromBase64(compressedBase64);
+                    } catch (e) {
+                        throw new Error("Decompression failed: data corrupted or invalid key.");
+                    }
+                    
+                    // 5. Parse header
+                    const view = new DataView(fullPayload.buffer);
+                    const headerLen = view.getUint32(0, false);
+                    const headerBytes = fullPayload.slice(4, 4 + headerLen);
+                    const headerJson = new TextDecoder().decode(headerBytes);
+                    const header = JSON.parse(headerJson);
+                    const { w, h } = header;
+                    
+                    const pixelStart = 4 + headerLen;
+                    const pixelData = fullPayload.slice(pixelStart);
+                    const expectedLen = w * h * 4;
+                    if (pixelData.length !== expectedLen) {
+                        throw new Error(`Pixel data corrupted: got ${pixelData.length}, expected ${expectedLen}. Wrong decryption key?`);
+                    }
+                    
+                    // 6. Reconstruct image
+                    const imgUrl = await pixelsToImage(pixelData, w, h);
+                    restoredImg.src = imgUrl;
+                    mergeResultDiv.classList.remove('hidden');
+                    
+                    // Store for download
+                    let currentRestoredUrl = imgUrl;
+                    downloadRestoredBtn.onclick = () => {
+                        const a = document.createElement('a');
+                        a.href = currentRestoredUrl;
+                        a.download = "restored_image.png";
+                        a.click();
+                    };
+                    
+                } catch (err) {
+                    console.error(err);
+                    alert("Merge failed: " + err.message);
+                } finally {
+                    mergeBtn.disabled = false;
+                    mergeBtn.innerHTML = "🔓 DECRYPT & RESTORE IMAGE";
+                }
+            });
+            
+            // ---------- Tab switching ----------
+            function setTab(tab) {
+                if (tab === 'split') {
+                    splitPanel.classList.remove('hidden');
+                    mergePanel.classList.add('hidden');
+                    splitTab.classList.add('tab-active');
+                    splitTab.classList.remove('tab-inactive');
+                    mergeTab.classList.add('tab-inactive');
+                    mergeTab.classList.remove('tab-active');
+                } else {
+                    splitPanel.classList.add('hidden');
+                    mergePanel.classList.remove('hidden');
+                    mergeTab.classList.add('tab-active');
+                    mergeTab.classList.remove('tab-inactive');
+                    splitTab.classList.add('tab-inactive');
+                    splitTab.classList.remove('tab-active');
+                }
+            }
+            splitTab.addEventListener('click', () => setTab('split'));
+            mergeTab.addEventListener('click', () => setTab('merge'));
+            
+            // Reset warnings/hide results on file change
+            splitImageInput.addEventListener('change', () => {
+                sizeWarning.classList.add('hidden');
+                splitResultDiv.classList.add('hidden');
+            });
+            matrixFileInput.addEventListener('change', () => {
+                mergeResultDiv.classList.add('hidden');
+            });
+        })();
+    </script>
+</body>
+</html>
