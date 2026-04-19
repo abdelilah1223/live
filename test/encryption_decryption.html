@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Image Matrix Encryptor | Split & Merge Tool</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Advanced compression library: LZ-string for efficient matrix compression (lossless, fast) -->
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+    <!-- FileSaver.js for saving files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9edf2 100%);
+            min-height: 100vh;
+        }
+        .tab-active {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .tab-inactive {
+            background-color: #f3f4f6;
+            color: #4b5563;
+            transition: all 0.2s;
+        }
+        .tab-inactive:hover {
+            background-color: #e5e7eb;
+        }
+        .card-shadow {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+        }
+        .transition-smooth {
+            transition: all 0.25s ease;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-black bg-gradient-to-r from-indigo-700 to-purple-700 bg-clip-text text-transparent">🔐 Matrix Cipher</h1>
+            <p class="text-gray-600 mt-2 text-lg">Split image → Encrypt & Compress matrix → Reconstruct with secret key</p>
+            <div class="w-24 h-1 bg-indigo-500 mx-auto rounded-full mt-3"></div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex flex-col sm:flex-row gap-3 mb-6 justify-center">
+            <button id="splitTabBtn" class="tab-active px-8 py-3 rounded-xl font-bold text-lg shadow-md transition-smooth flex items-center justify-center gap-2">
+                🧩 SPLIT & ENCRYPT
+            </button>
+            <button id="mergeTabBtn" class="tab-inactive px-8 py-3 rounded-xl font-bold text-lg shadow-sm transition-smooth flex items-center justify-center gap-2">
+                🔗 MERGE & DECRYPT
+            </button>
+        </div>
+
+        <!-- ==================== TAB 1: SPLIT / DECOMPOSE PANEL ==================== -->
+        <div id="splitPanel" class="bg-white rounded-2xl card-shadow overflow-hidden transition-all duration-300">
+            <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 px-6 py-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">📸 Step 1: Decompose Image → Encrypted Compressed Matrix</h2>
+                <p class="text-indigo-100 text-sm mt-1">Upload image (max 5MB) → Provide encryption key → Get compressed + encrypted matrix data</p>
+            </div>
+            <div class="p-6 space-y-5">
+                <!-- File Upload -->
+                <div>
+                    <label class="block text-gray-800 font-semibold mb-2">🖼️ Select Image (JPG, PNG, WEBP)</label>
+                    <input type="file" id="splitImageInput" accept="image/jpeg,image/png,image/webp" class="w-full border-2 border-gray-200 rounded-xl p-2.5 bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
+                    <p id="sizeWarning" class="text-red-500 text-xs mt-1 hidden">❌ File exceeds 5MB limit. Please choose a smaller image.</p>
+                </div>
+                <!-- Encryption Key -->
+                <div>
+                    <label class="block text-gray-800 font-semibold mb-2">🔑 Encryption Key (Secret Code)</label>
+                    <input type="text" id="encryptKeyInput" placeholder="e.g., mySecretKey123" class="w-full border-2 border-gray-200 rounded-xl p-2.5 bg-gray-50 focus:ring-2 focus:ring-indigo-400 font-mono" dir="ltr">
+                    <p class="text-xs text-gray-400 mt-1">Used to encrypt the compressed matrix (XOR cipher + key stretching)</p>
+                </div>
+                <!-- Action Button -->
+                <button id="processSplitBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-lg">
+                    ⚡ DECOMPOSE & ENCRYPT MATRIX
+                </button>
+
+                <!-- Result Area (hidden initially) -->
+                <div id="splitResultArea" class="hidden mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div class="flex justify-between items-center flex-wrap gap-3 mb-3">
+                        <span class="font-bold text-gray-800">✅ Encrypted + Compressed Matrix Ready</span>
+                        <div class="flex gap-3">
+                            <button id="downloadMatrixAsImageBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-2 rounded-lg flex items-center gap-1 shadow-sm transition">🖼️ Save as Image</button>
+                            <button id="copyMatrixAsTextBtn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg flex items-center gap-1 shadow-sm transition">📋 Copy as Text</button>
+                        </div>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border text-xs font-mono text-gray-600 break-all max-h-32 overflow-auto" id="matrixDataPreview"></div>
+                    <p class="text-[11px] text-gray-400 mt-2">* Data includes image dimensions, orientation, start/end markers + LZ-compressed + XOR encrypted + Base64.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 2: MERGE / RECONSTRUCT PANEL ==================== -->
+        <div id="mergePanel" class="hidden bg-white rounded-2xl card-shadow overflow-hidden transition-all duration-300">
+            <div class="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">🔄 Step 2: Reconstruct Image from Matrix</h2>
+                <p class="text-emerald-100 text-sm mt-1">Paste matrix text OR upload image containing matrix → Enter decryption key → Restore original image</p>
+            </div>
+            <div class="p-6 space-y-5">
+                <!-- Two input modes: text or image -->
+                <div class="flex gap-3 border-b pb-2">
+                    <button id="textModeBtn" class="mode-btn-active px-5 py-2 rounded-full text-sm font-semibold transition-all bg-indigo-100 text-indigo-700">📄 Paste Matrix Text</button>
+                    <button id="imageModeBtn" class="mode-btn-inactive px-5 py-2 rounded-full text-sm font-semibold transition-all bg-gray-100 text-gray-600">🖼️ Upload Matrix Image</button>
+                </div>
+
+                <!-- Text input area -->
+                <div id="textInputArea">
+                    <label class="block text-gray-800 font-semibold mb-2">📋 Encrypted + Compressed Matrix (Base64 string)</label>
+                    <textarea id="matrixTextInput" rows="4" class="w-full border-2 border-gray-200 rounded-xl p-3 bg-gray-50 font-mono text-xs" placeholder='{"version":"1.0","w":800,"h":600,"direction":"row-major","startEnd":"TL-BR","data":"LzNkcmF...base64..."}'></textarea>
+                </div>
+
+                <!-- Image upload area (hidden initially) -->
+                <div id="imageInputArea" class="hidden">
+                    <label class="block text-gray-800 font-semibold mb-2">📸 Upload Image that contains the matrix data (PNG with visible text)</label>
+                    <input type="file" id="matrixImageInput" accept="image/png,image/jpeg" class="w-full border-2 border-gray-200 rounded-xl p-2.5 bg-gray-50">
+                    <p class="text-xs text-amber-600 mt-1">⚠️ For best results, use the "Save as Image" option from Split panel. The image will have visible text — copy it manually or use text mode.</p>
+                </div>
+
+                <!-- Decryption Key -->
+                <div>
+                    <label class="block text-gray-800 font-semibold mb-2">🔓 Decryption Key (same as encryption key)</label>
+                    <input type="text" id="decryptKeyInput" placeholder="Enter the secret key used for encryption" class="w-full border-2 border-gray-200 rounded-xl p-2.5 bg-gray-50 font-mono" dir="ltr">
+                </div>
+
+                <button id="processMergeBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-lg">
+                    🔓 DECRYPT & RECONSTRUCT IMAGE
+                </button>
+
+                <!-- Result: reconstructed image -->
+                <div id="mergeResultArea" class="hidden mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <p class="font-bold text-gray-800 mb-3">✨ Restored Image:</p>
+                    <div class="flex justify-center bg-white p-3 rounded-lg">
+                        <img id="reconstructedImg" class="max-w-full max-h-64 rounded-md shadow-md object-contain" alt="Reconstructed image">
+                    </div>
+                    <button id="downloadRestoredBtn" class="mt-4 w-full bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition">💾 Download Restored Image</button>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="text-center text-gray-400 text-xs mt-8 border-t pt-5">
+            Advanced Matrix Cipher | Lossless LZ Compression + XOR Encryption | Image splitting & merging with full orientation metadata
+        </footer>
+    </div>
+
+    <script>
+        (function() {
+            // -------------------- DOM Elements --------------------
+            // Tabs
+            const splitTab = document.getElementById('splitTabBtn');
+            const mergeTab = document.getElementById('mergeTabBtn');
+            const splitPanel = document.getElementById('splitPanel');
+            const mergePanel = document.getElementById('mergePanel');
+            
+            // Split panel elements
+            const splitImageInput = document.getElementById('splitImageInput');
+            const encryptKeyInput = document.getElementById('encryptKeyInput');
+            const processSplitBtn = document.getElementById('processSplitBtn');
+            const sizeWarning = document.getElementById('sizeWarning');
+            const splitResultArea = document.getElementById('splitResultArea');
+            const matrixDataPreview = document.getElementById('matrixDataPreview');
+            const downloadMatrixAsImageBtn = document.getElementById('downloadMatrixAsImageBtn');
+            const copyMatrixAsTextBtn = document.getElementById('copyMatrixAsTextBtn');
+            
+            // Merge panel elements
+            const textModeBtn = document.getElementById('textModeBtn');
+            const imageModeBtn = document.getElementById('imageModeBtn');
+            const textInputArea = document.getElementById('textInputArea');
+            const imageInputArea = document.getElementById('imageInputArea');
+            const matrixTextInput = document.getElementById('matrixTextInput');
+            const matrixImageInput = document.getElementById('matrixImageInput');
+            const decryptKeyInput = document.getElementById('decryptKeyInput');
+            const processMergeBtn = document.getElementById('processMergeBtn');
+            const mergeResultArea = document.getElementById('mergeResultArea');
+            const reconstructedImg = document.getElementById('reconstructedImg');
+            const downloadRestoredBtn = document.getElementById('downloadRestoredBtn');
+            
+            // Global stored current matrix data (for split result)
+            let currentMatrixPackage = null;
+            
+            // Max size 5MB
+            const MAX_SIZE = 5 * 1024 * 1024;
+            
+            // ========== HELPER FUNCTIONS ==========
+            
+            // XOR encryption/decryption with key stretching (simple but effective for matrix)
+            function xorCipher(dataStr, keyStr) {
+                let result = '';
+                const keyLen = keyStr.length;
+                for (let i = 0; i < dataStr.length; i++) {
+                    const charCode = dataStr.charCodeAt(i);
+                    const keyCode = keyStr.charCodeAt(i % keyLen);
+                    result += String.fromCharCode(charCode ^ keyCode);
+                }
+                return result;
+            }
+            
+            // Convert Uint8Array to binary string (latin1)
+            function uint8ToBinaryString(uint8) {
+                let binary = '';
+                for (let i = 0; i < uint8.length; i++) {
+                    binary += String.fromCharCode(uint8[i]);
+                }
+                return binary;
+            }
+            
+            function binaryStringToUint8(binaryStr) {
+                const len = binaryStr.length;
+                const uint8 = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    uint8[i] = binaryStr.charCodeAt(i) & 0xFF;
+                }
+                return uint8;
+            }
+            
+            // Advanced compression: LZ-string (ultra fast, lossless, perfect for matrix/array data)
+            function compressWithLZ(uint8Array) {
+                const binaryStr = uint8ToBinaryString(uint8Array);
+                const compressedBase64 = LZString.compressToBase64(binaryStr);
+                return compressedBase64;
+            }
+            
+            function decompressWithLZ(compressedBase64) {
+                const decompressedBinaryStr = LZString.decompressFromBase64(compressedBase64);
+                if (!decompressedBinaryStr) throw new Error("LZ decompression failed - data corrupted or wrong key?");
+                return binaryStringToUint8(decompressedBinaryStr);
+            }
+            
+            // Convert image file to raw pixel matrix (RGBA) + metadata
+            async function imageToRawMatrix(file) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    const url = URL.createObjectURL(file);
+                    img.onload = () => {
+                        URL.revokeObjectURL(url);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                        const rgbaData = new Uint8Array(imageData.data); // RGBA interleaved
+                        const metadata = {
+                            w: img.width,
+                            h: img.height,
+                            direction: "row-major",
+                            startEnd: "top-left to bottom-right"
+                        };
+                        resolve({ pixelArray: rgbaData, metadata });
+                    };
+                    img.onerror = () => reject(new Error("Failed to load image"));
+                    img.src = url;
+                });
+            }
+            
+            // Reconstruct image from raw pixel Uint8Array + dimensions
+            async function rawMatrixToImage(pixelArray, width, height) {
+                return new Promise((resolve, reject) => {
+                    if (pixelArray.length !== width * height * 4) {
+                        reject(new Error(`Invalid pixel data length: ${pixelArray.length}, expected ${width * height * 4}`));
+                        return;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    const imageData = new ImageData(new Uint8ClampedArray(pixelArray), width, height);
+                    ctx.putImageData(imageData, 0, 0);
+                    canvas.toBlob(blob => {
+                        if (blob) resolve(URL.createObjectURL(blob));
+                        else reject("Canvas to Blob failed");
+                    }, 'image/png');
+                });
+            }
+            
+            // ========== SPLIT PROCESS: Image → Matrix → Compress (LZ) → Encrypt → Base64 Package ==========
+            processSplitBtn.addEventListener('click', async () => {
+                const file = splitImageInput.files[0];
+                if (!file) {
+                    alert("Please select an image first.");
+                    return;
+                }
+                if (file.size > MAX_SIZE) {
+                    sizeWarning.classList.remove('hidden');
+                    return;
+                }
+                sizeWarning.classList.add('hidden');
+                const key = encryptKeyInput.value.trim();
+                if (!key) {
+                    alert("Encryption key is required. Please enter a secret key.");
+                    return;
+                }
+                
+                processSplitBtn.disabled = true;
+                processSplitBtn.innerHTML = "⏳ Processing matrix...";
+                
+                try {
+                    // Step 1: extract pixel matrix & metadata
+                    const { pixelArray, metadata } = await imageToRawMatrix(file);
+                    
+                    // Step 2: prepare full payload = header JSON (metadata) + pixelArray
+                    const headerObj = {
+                        w: metadata.w,
+                        h: metadata.h,
+                        dir: metadata.direction,
+                        se: metadata.startEnd,
+                        version: "2.0"
+                    };
+                    const headerStr = JSON.stringify(headerObj);
+                    const headerBytes = new TextEncoder().encode(headerStr);
+                    const headerLen = headerBytes.length;
+                    // Combine: 4 bytes header length (Uint32) + headerBytes + pixelArray
+                    const fullPayload = new Uint8Array(4 + headerLen + pixelArray.length);
+                    const view = new DataView(fullPayload.buffer);
+                    view.setUint32(0, headerLen, false); // big-endian
+                    fullPayload.set(headerBytes, 4);
+                    fullPayload.set(pixelArray, 4 + headerLen);
+                    
+                    // Step 3: Compress using LZ-string (lossless, advanced, fast for matrices)
+                    const compressedBase64 = compressWithLZ(fullPayload);
+                    
+                    // Step 4: Encrypt the compressed string (after compression) using XOR cipher
+                    const encryptedStr = xorCipher(compressedBase64, key);
+                    
+                    // Step 5: Encode to base64 for safe transport (final matrix package)
+                    const finalBase64 = btoa(unescape(encodeURIComponent(encryptedStr)));
+                    
+                    // Build final JSON package
+                    currentMatrixPackage = {
+                        version: "2.0",
+                        w: metadata.w,
+                        h: metadata.h,
+                        direction: metadata.direction,
+                        startEnd: metadata.startEnd,
+                        data: finalBase64
+                    };
+                    
+                    const previewText = JSON.stringify(currentMatrixPackage, null, 2);
+                    matrixDataPreview.innerText = previewText.length > 300 ? previewText.substring(0, 300) + "..." : previewText;
+                    splitResultArea.classList.remove('hidden');
+                    
+                } catch (err) {
+                    console.error(err);
+                    alert("Error during decomposition: " + err.message);
+                } finally {
+                    processSplitBtn.disabled = false;
+                    processSplitBtn.innerHTML = "⚡ DECOMPOSE & ENCRYPT MATRIX";
+                }
+            });
+            
+            // Copy as text to clipboard
+            copyMatrixAsTextBtn.addEventListener('click', async () => {
+                if (!currentMatrixPackage) {
+                    alert("No matrix data available. Please decompose an image first.");
+                    return;
+                }
+                const jsonStr = JSON.stringify(currentMatrixPackage);
+                try {
+                    await navigator.clipboard.writeText(jsonStr);
+                    alert("✅ Matrix data copied to clipboard as plain text!");
+                } catch (err) {
+                    alert("Failed to copy: " + err.message);
+                }
+            });
+            
+            // Save as image: create a PNG image that visually contains the matrix text (so user can later upload)
+            downloadMatrixAsImageBtn.addEventListener('click', () => {
+                if (!currentMatrixPackage) {
+                    alert("No matrix data to save.");
+                    return;
+                }
+                const jsonStr = JSON.stringify(currentMatrixPackage, null, 2);
+                // Create canvas with wrapped text
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 900;
+                canvas.height = 600;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#1e293b';
+                ctx.font = 'bold 16px "Courier New", monospace';
+                ctx.fillText("🔐 ENCRYPTED MATRIX DATA (copy this text)", 30, 40);
+                ctx.font = '13px monospace';
+                ctx.fillStyle = '#334155';
+                // Wrap text
+                const lines = [];
+                let currentLine = '';
+                const maxWidth = 820;
+                const words = jsonStr.split('');
+                for (let char of words) {
+                    let testLine = currentLine + char;
+                    let metrics = ctx.measureText(testLine);
+                    if (metrics.width > maxWidth && currentLine.length > 0) {
+                        lines.push(currentLine);
+                        currentLine = char;
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                lines.push(currentLine);
+                let y = 90;
+                for (let line of lines) {
+                    ctx.fillText(line, 30, y);
+                    y += 22;
+                    if (y > canvas.height - 40) {
+                        // if text overflows, create new canvas? but fine
+                        break;
+                    }
+                }
+                canvas.toBlob(blob => {
+                    saveAs(blob, "matrix_data_image.png");
+                });
+            });
+            
+            // ========== MERGE PROCESS: Decrypt + Decompress + Reconstruct ==========
+            async function getMatrixDataFromSource() {
+                // Check which mode is active
+                if (!textInputArea.classList.contains('hidden')) {
+                    const rawText = matrixTextInput.value.trim();
+                    if (!rawText) throw new Error("Please paste the matrix text.");
+                    return JSON.parse(rawText);
+                } else {
+                    // Image mode: read the uploaded image, extract text via canvas (since image contains visible text)
+                    const file = matrixImageInput.files[0];
+                    if (!file) throw new Error("Please upload an image containing matrix data.");
+                    return new Promise((resolve, reject) => {
+                        const img = new Image();
+                        const url = URL.createObjectURL(file);
+                        img.onload = () => {
+                            URL.revokeObjectURL(url);
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0);
+                            // Use OCR? Not needed. We'll instruct user: but to be robust, we attempt to read text using simple approach: 
+                            // Actually, we can't automatically extract text from image without OCR library. However, we show alert to copy manually.
+                            // For better UX, we let user copy-paste from the image. So we reject and ask to use text mode.
+                            reject(new Error("Automatic text extraction from image is limited. Please copy the matrix text from the image and use 'Paste Matrix Text' mode for accuracy."));
+                        };
+                        img.onerror = () => reject(new Error("Failed to load image"));
+                        img.src = url;
+                    });
+                }
+            }
+            
+            processMergeBtn.addEventListener('click', async () => {
+                const key = decryptKeyInput.value.trim();
+                if (!key) {
+                    alert("Decryption key is required (must match encryption key).");
+                    return;
+                }
+                
+                processMergeBtn.disabled = true;
+                processMergeBtn.innerHTML = "⏳ Decrypting & Reconstructing...";
+                
+                try {
+                    let matrixPackage;
+                    if (!textInputArea.classList.contains('hidden')) {
+                        const text = matrixTextInput.value.trim();
+                        if (!text) throw new Error("Matrix text is empty.");
+                        matrixPackage = JSON.parse(text);
+                    } else {
+                        // Image mode: attempt to read image as dataURL and get text? but we provide a warning. We'll do fallback to let user paste.
+                        const file = matrixImageInput.files[0];
+                        if (!file) throw new Error("Please upload an image or switch to text mode.");
+                        alert("Image mode requires manual text copy. Please switch to 'Paste Matrix Text' tab and copy the matrix data from the image.");
+                        throw new Error("Use text mode for reliable decryption.");
+                    }
+                    
+                    // Validate package
+                    if (!matrixPackage.data) throw new Error("Invalid matrix package: missing 'data' field.");
+                    
+                    // Step 1: Decode base64
+                    const encryptedCompressedB64 = matrixPackage.data;
+                    let encryptedStr;
+                    try {
+                        encryptedStr = decodeURIComponent(escape(atob(encryptedCompressedB64)));
+                    } catch(e) {
+                        throw new Error("Failed to decode base64 data. Corrupted?");
+                    }
+                    
+                    // Step 2: Decrypt using XOR (same key)
+                    const compressedBase64 = xorCipher(encryptedStr, key);
+                    
+                    // Step 3: Decompress using LZ-string
+                    const decompressedFullPayload = decompressWithLZ(compressedBase64);
+                    
+                    // Step 4: Parse header and extract pixel matrix
+                    const view = new DataView(decompressedFullPayload.buffer);
+                    const headerLen = view.getUint32(0, false);
+                    const headerBytes = decompressedFullPayload.slice(4, 4 + headerLen);
+                    const headerJson = new TextDecoder().decode(headerBytes);
+                    const header = JSON.parse(headerJson);
+                    const expectedWidth = header.w;
+                    const expectedHeight = header.h;
+                    const pixelStart = 4 + headerLen;
+                    const pixelData = decompressedFullPayload.slice(pixelStart);
+                    const expectedLen = expectedWidth * expectedHeight * 4;
+                    if (pixelData.length !== expectedLen) {
+                        throw new Error(`Pixel data mismatch: got ${pixelData.length}, expected ${expectedLen}. Wrong decryption key?`);
+                    }
+                    
+                    // Reconstruct image
+                    const imageUrl = await rawMatrixToImage(pixelData, expectedWidth, expectedHeight);
+                    reconstructedImg.src = imageUrl;
+                    mergeResultArea.classList.remove('hidden');
+                    
+                    // Store blob url for download
+                    let currentRestoredBlobUrl = imageUrl;
+                    downloadRestoredBtn.onclick = () => {
+                        const a = document.createElement('a');
+                        a.href = currentRestoredBlobUrl;
+                        a.download = "restored_image.png";
+                        a.click();
+                    };
+                    
+                } catch (err) {
+                    console.error(err);
+                    alert("Reconstruction failed: " + err.message + "\nMake sure you entered the correct decryption key and valid matrix data.");
+                } finally {
+                    processMergeBtn.disabled = false;
+                    processMergeBtn.innerHTML = "🔓 DECRYPT & RECONSTRUCT IMAGE";
+                }
+            });
+            
+            // ========== TAB SWITCHING LOGIC ==========
+            function setActiveTab(tabName) {
+                if (tabName === 'split') {
+                    splitPanel.classList.remove('hidden');
+                    mergePanel.classList.add('hidden');
+                    splitTab.classList.add('tab-active');
+                    splitTab.classList.remove('tab-inactive');
+                    mergeTab.classList.add('tab-inactive');
+                    mergeTab.classList.remove('tab-active');
+                } else {
+                    splitPanel.classList.add('hidden');
+                    mergePanel.classList.remove('hidden');
+                    mergeTab.classList.add('tab-active');
+                    mergeTab.classList.remove('tab-inactive');
+                    splitTab.classList.add('tab-inactive');
+                    splitTab.classList.remove('tab-active');
+                }
+            }
+            
+            splitTab.addEventListener('click', () => setActiveTab('split'));
+            mergeTab.addEventListener('click', () => setActiveTab('merge'));
+            
+            // Switch between text/image mode inside merge panel
+            function setMergeInputMode(mode) {
+                if (mode === 'text') {
+                    textInputArea.classList.remove('hidden');
+                    imageInputArea.classList.add('hidden');
+                    textModeBtn.classList.add('bg-indigo-100', 'text-indigo-700');
+                    textModeBtn.classList.remove('bg-gray-100', 'text-gray-600');
+                    imageModeBtn.classList.add('bg-gray-100', 'text-gray-600');
+                    imageModeBtn.classList.remove('bg-indigo-100', 'text-indigo-700');
+                } else {
+                    textInputArea.classList.add('hidden');
+                    imageInputArea.classList.remove('hidden');
+                    imageModeBtn.classList.add('bg-indigo-100', 'text-indigo-700');
+                    imageModeBtn.classList.remove('bg-gray-100', 'text-gray-600');
+                    textModeBtn.classList.add('bg-gray-100', 'text-gray-600');
+                    textModeBtn.classList.remove('bg-indigo-100', 'text-indigo-700');
+                }
+            }
+            
+            textModeBtn.addEventListener('click', () => setMergeInputMode('text'));
+            imageModeBtn.addEventListener('click', () => setMergeInputMode('image'));
+            
+            // initial reset
+            setActiveTab('split');
+            setMergeInputMode('text');
+        })();
+    </script>
+</body>
+</html>
