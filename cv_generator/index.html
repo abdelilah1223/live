@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Forge Pro — Complete Reset</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        *{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}
+        body{background:#eef2f7;font-family:'Inter',sans-serif}
+        .prog-track{background:#dde3ed;border-radius:99px;height:7px;width:100%}
+        .prog-fill{background:linear-gradient(90deg,#4f46e5,#7c3aed);height:7px;border-radius:99px;transition:width .35s ease}
+        .pill{transition:all .2s;cursor:pointer;padding:7px 0;border-radius:99px;text-align:center;font-size:.65rem;font-weight:600;background:#f1f5f9;color:#64748b}
+        .pill.on{background:#4f46e5;color:#fff;box-shadow:0 3px 10px rgba(79,70,229,.35)}
+        .pill.ok{background:#10b981;color:#fff}
+        .chip{padding:3px 11px;border-radius:99px;font-size:.73rem;display:inline-flex;align-items:center;gap:6px;margin:0 3px 3px 0}
+        .preview-vp{overflow-y:auto;max-height:72vh;scrollbar-width:thin;scrollbar-color:#94a3b8 transparent}
+        .preview-vp::-webkit-scrollbar{width:7px}
+        .preview-vp::-webkit-scrollbar-track{background:transparent}
+        .preview-vp::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:99px}
+        .upbtn{background:linear-gradient(135deg,#4f46e5,#6d5ff2);color:#fff;padding:9px 18px;border-radius:99px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;font-size:.82rem;font-weight:500;transition:all .2s}
+        .upbtn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+        input[type="file"]{display:none}
+        .fi{border:1.5px solid #d1d9e6;border-radius:10px;padding:9px 13px;font-size:.88rem;transition:border-color .2s,box-shadow .2s;background:#fff;width:100%;outline:none}
+        .fi:focus{border-color:#818cf8;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+        .fl{font-size:.78rem;font-weight:600;color:#475569;margin-bottom:4px;display:block}
+        .toast-box{position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+        .toast{padding:12px 20px;border-radius:12px;font-size:.85rem;font-weight:500;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:tIn .3s ease;max-width:360px;pointer-events:auto}
+        .toast.s{background:#059669}.toast.e{background:#dc2626}.toast.i{background:#4f46e5}
+        @keyframes tIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+    </style>
+</head>
+<body class="p-3 md:p-6">
+<div class="toast-box" id="toasts"></div>
+<div class="max-w-7xl mx-auto">
+    <header class="flex flex-wrap justify-between items-center mb-5 gap-3 no-print">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent flex items-center gap-2"><i class="fas fa-wand-magic-sparkles text-indigo-500"></i>CV Forge Pro</h1>
+            <p class="text-slate-400 text-xs mt-1">Full customization &bull; Live preview &bull; Complete reset</p>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+            <button id="btnExJ" class="bg-slate-600 hover:bg-slate-700 text-white px-3.5 py-2 rounded-xl text-xs shadow flex items-center gap-2 transition"><i class="fas fa-download"></i> Example JSON</button>
+            <input type="file" id="jsonIn" accept=".json" class="hidden">
+            <button id="finR" class="bg-red-50 hover:bg-red-100 text-red-700 px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 font-semibold transition text-sm border border-red-200"><i class="fas fa-redo"></i> Reset Data</button>
+            <button id="btnClearAllHeader" class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-4 py-2.5 rounded-xl flex items-center gap-2 font-semibold transition text-sm border border-rose-200"><i class="fas fa-trash-alt"></i> Clear All</button>
+            <button id="btnImpJ" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3.5 py-2 rounded-xl text-xs shadow flex items-center gap-2 transition"><i class="fas fa-upload"></i> Import JSON</button>
+            <button id="btnHdrP" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl shadow-md flex items-center gap-2 font-semibold text-xs transition"><i class="fas fa-print"></i> Print / PDF</button>
+        </div>
+    </header>
+    <div class="grid lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-2xl shadow-xl border border-indigo-50 overflow-hidden flex flex-col">
+            <div class="p-4 pb-2 bg-slate-50/80 border-b">
+                <div class="flex justify-between text-[.68rem] text-slate-400 mb-1"><span><i class="fas fa-chart-line"></i> Progress</span><span id="pLbl">0%</span></div>
+                <div class="prog-track"><div id="pBar" class="prog-fill" style="width:0%"></div></div>
+                <div class="flex gap-1.5 mt-3" id="pills">
+                    <div class="pill flex-1" data-s="0"><i class="fas fa-user"></i> Basics</div>
+                    <div class="pill flex-1" data-s="1"><i class="fas fa-graduation-cap"></i> Edu</div>
+                    <div class="pill flex-1" data-s="2"><i class="fas fa-briefcase"></i> Exp</div>
+                    <div class="pill flex-1" data-s="3"><i class="fas fa-code"></i> Skills</div>
+                    <div class="pill flex-1" data-s="4"><i class="fas fa-folder-open"></i> Proj</div>
+                    <div class="pill flex-1" data-s="5"><i class="fas fa-flag-checkered"></i> Finish</div>
+                </div>
+            </div>
+            <div id="formArea" class="p-5 flex-1 overflow-y-auto" style="max-height:460px"></div>
+            <div class="flex justify-between p-4 border-t bg-slate-50/80">
+                <button id="btnPrev" class="px-5 py-2 rounded-xl bg-slate-200 text-slate-700 hover:bg-slate-300 transition text-sm"><i class="fas fa-arrow-left mr-1"></i> Back</button>
+                <button id="btnNext" class="px-6 py-2 rounded-xl bg-indigo-600 text-white shadow hover:bg-indigo-700 transition text-sm font-semibold">Next <i class="fas fa-arrow-right ml-1"></i></button>
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col border border-slate-200">
+            <div class="bg-slate-50 px-4 py-2.5 border-b flex flex-wrap items-center gap-2 no-print">
+                <i class="fas fa-palette text-violet-500 text-sm"></i>
+                <span class="font-semibold text-xs text-slate-600">Design</span>
+                <input type="color" id="inP" value="#4f46e5" class="w-7 h-7 rounded-full border-2 border-white shadow cursor-pointer" title="Primary">
+                <input type="color" id="inS" value="#1e1b4b" class="w-7 h-7 rounded-full border-2 border-white shadow cursor-pointer" title="Secondary">
+                <select id="inF" class="text-xs border rounded-lg p-1.5 bg-white shadow-sm"><option value="Inter">Inter</option><option value="Playfair Display">Playfair</option><option value="Poppins">Poppins</option><option value="Roboto Mono">Roboto Mono</option></select>
+                <select id="inT" class="text-xs border rounded-lg p-1.5 bg-white shadow-sm"><option value="classic">Classic</option><option value="ats">ATS Friendly</option></select>
+                <div class="ml-auto flex gap-2">
+                    <button id="btnExpJ2" class="bg-slate-700 hover:bg-slate-800 text-white px-2.5 py-1 rounded-lg text-[.7rem] flex items-center gap-1 transition"><i class="fas fa-file-export"></i> JSON</button>
+                    <button id="btnPdf2" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded-lg text-[.7rem] flex items-center gap-1 transition"><i class="fas fa-print"></i> PDF</button>
+                </div>
+            </div>
+            <div id="prevVp" class="preview-vp bg-slate-200/60 p-5 flex justify-center items-start">
+                <div class="text-center text-slate-400 py-16"><i class="fas fa-arrow-left text-indigo-200 text-4xl mb-3 block"></i><p class="text-sm">Fill in your details — preview appears here</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ═══════════════ DEFAULT DATA & EMPTY STRUCTURE ═══════════════ */
+const DEF = {
+    basics: { fullName: "Emma Watson", headline: "Full Stack Developer", email: "emma@example.com", phone: "+1 555 123 4567", location: "New York, NY", github: "https://github.com/emma", linkedin: "https://linkedin.com/in/emma", instagram: "https://instagram.com/emma", facebook: "https://facebook.com/emma", portfolio: "https://emma.dev", summary: "Creative developer with 5+ years of experience building scalable web apps and leading cross-functional teams. Passionate about clean code, user experience, and mentoring.", profilePicture: "" },
+    education: [{ degree: "B.Sc. Computer Science", institution: "University of Tech", startDate: "2018-09", endDate: "2022-06", current: false, details: "GPA 3.8 — AI specialization, Dean's List" }],
+    experience: [{ role: "Frontend Developer", company: "Innovate Inc", startDate: "2022-07", endDate: "", current: true, highlights: "Built React component library used across 5 products. Improved core web vitals by 30%. Mentored 3 junior developers." }],
+    skills: { technical: ["JavaScript", "React", "Python", "Node.js", "Tailwind CSS", "TypeScript"], soft: ["Teamwork", "Communication", "Problem Solving", "Leadership"] },
+    languages: [{ name: "English", level: "Native" }, { name: "Spanish", level: "Intermediate" }],
+    achievements: ["Shipped 12+ production apps", "Open source contributor — 2k+ GitHub stars", "Hackathon winner 2023"],
+    projects: [{ name: "AI Dashboard", tech: "React, FastAI, Python", startDate: "2024-01", endDate: "2024-03", description: "Real-time analytics dashboard with AI-powered predictions and interactive charts." }]
+};
+
+// Empty CV template — completely blank slate
+const EMPTY_CV = {
+    basics: { fullName: "", headline: "", email: "", phone: "", location: "", github: "", linkedin: "", instagram: "", facebook: "", portfolio: "", summary: "", profilePicture: "" },
+    education: [],
+    experience: [],
+    skills: { technical: [], soft: [] },
+    languages: [],
+    achievements: [],
+    projects: []
+};
+
+let cv = structuredClone(DEF);
+let st = 0;
+let tpl = "classic";
+const TS = 6;
+let sty = { p: "#4f46e5", s: "#1e1b4b", f: "Inter" };
+
+/* ═══════════════ HELPERS ═══════════════ */
+function esc(s) { if (!s) return ""; return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fD(a, b, c) { if (!a) return ""; const f = d => { if (!d) return "Present"; const [y, m] = d.split("-"); return MO[+m - 1] + " " + y; }; return f(a) + " – " + (c ? "Present" : f(b)); }
+function toast(m, t = "i") { const c = document.getElementById("toasts"), e = document.createElement("div"); e.className = "toast " + t; e.innerHTML = `<i class="fas ${t === 's' ? 'fa-check-circle' : t === 'e' ? 'fa-exclamation-circle' : 'fa-info-circle'} mr-2"></i>${m}`; c.appendChild(e); setTimeout(() => { e.style.opacity = "0"; e.style.transition = "opacity .3s"; setTimeout(() => e.remove(), 300); }, 3000); }
+
+function pImg(src, sz, dark) {
+    if (!src || src.trim().length < 10) return '';
+    const bd = dark ? '3px solid rgba(255,255,255,0.4)' : '2px solid #cbd5e1';
+    return `<div style="width:${sz}px;height:${sz}px;flex-shrink:0;border-radius:50%;overflow:hidden;border:${bd};box-shadow:0 4px 15px rgba(0,0,0,.12)"><img src="${src}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.remove()"></div>`;
+}
+
+function qrI(url, label, dark) {
+    if (!url || url.trim().length < 5) return '';
+    const lc = dark ? 'rgba(255,255,255,0.7)' : '#64748b';
+    return `<div style="text-align:center;flex-shrink:0"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url.trim())}&bgcolor=ffffff&color=1f2937" style="width:68px;height:68px;border-radius:5px;display:block;margin:0 auto" onerror="this.parentElement.style.display='none'"><span style="font-size:9px;color:${lc};display:block;margin-top:4px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">${esc(label)}</span></div>`;
+}
+function qrRow(dark) {
+    const b = cv.basics;
+    const codes = [qrI(b.github, 'GitHub', dark), qrI(b.linkedin, 'LinkedIn', dark), qrI(b.instagram, 'Instagram', dark), qrI(b.facebook, 'Facebook', dark), qrI(b.portfolio, 'Portfolio', dark)].filter(c => c);
+    if (!codes.length) return '';
+    return `<div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;align-items:flex-start">${codes.join('')}</div>`;
+}
+
+function compressImg(dataUrl, maxW = 400, quality = 0.7) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => { const c = document.createElement('canvas'); let w = img.width, h = img.height; if (w > maxW) { h = h * maxW / w; w = maxW; } c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h); resolve(c.toDataURL('image/jpeg', quality)); };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+    });
+}
+
+/* ═══════════════ TEMPLATES (CLASSIC & ATS) ═══════════════ */
+function rClassic(d) {
+    const b = d.basics;
+    const pic = pImg(b.profilePicture, 96, true);
+    return `
+<div class="cv-page rounded-xl shadow-lg overflow-hidden">
+    <div class="cv-secondary-bg px-6 py-7 text-white">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:20px">
+            ${pic}
+            <div style="flex:1;min-width:0">
+                <h1 style="font-size:1.9rem;font-weight:800;line-height:1.2;margin:0">${esc(b.fullName) || "Your Name"}</h1>
+                <p style="opacity:.9;font-size:1rem;margin-top:4px">${esc(b.headline) || "Professional Title"}</p>
+                <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:.88rem;margin-top:10px;opacity:.85">
+                    ${b.email ? `<span><i class="far fa-envelope" style="margin-right:4px"></i>${esc(b.email)}</span>` : ''}
+                    ${b.phone ? `<span><i class="fas fa-phone-alt" style="margin-right:4px"></i>${esc(b.phone)}</span>` : ''}
+                    ${b.location ? `<span><i class="fas fa-map-marker-alt" style="margin-right:4px"></i>${esc(b.location)}</span>` : ''}
+                </div>
+            </div>
+        </div>
+        <div style="border-top:1px solid rgba(255,255,255,0.15);margin-top:16px;padding-top:14px">
+            ${qrRow(true)}
+        </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:0">
+        <div class="bg-slate-50" style="padding:20px;border-right:1px solid #e2e8f0">
+            ${_skS("Technical Skills", "fa-code", d.skills.technical, true)}
+            ${_skS("Soft Skills", "fa-users", d.skills.soft, false)}
+            ${_lgS(d.languages)}
+            ${_acS(d.achievements)}
+        </div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:20px">
+            ${b.summary ? _sec("Summary", "fa-user-edit", `<p style="font-size:.88rem;line-height:1.6;color:#475569;margin:0">${esc(b.summary)}</p>`) : ''}
+            ${d.experience.length ? _sec("Work Experience", "fa-briefcase", _expL(d.experience)) : ''}
+            ${d.education.length ? _sec("Education", "fa-graduation-cap", _eduL(d.education)) : ''}
+            ${d.projects.length ? _sec("Featured Projects", "fa-folder-open", _projL(d.projects)) : ''}
+        </div>
+    </div>
+    <div class="bg-slate-100" style="padding:8px 20px;text-align:center;font-size:.7rem;color:#94a3b8;border-top:1px solid #e2e8f0">${b.portfolio ? `<i class="fas fa-globe" style="margin-right:4px"></i>${esc(b.portfolio)} &bull; ` : ''}Scan QR codes to connect</div>
+</div>`;
+}
+
+function rAts(d) {
+    const b = d.basics;
+    const pic = pImg(b.profilePicture, 72, false);
+    return `
+<div class="cv-page" style="padding:40px;font-family:'${sty.f}',Georgia,serif;color:#1e293b;line-height:1.5">
+    <div style="text-align:center;margin-bottom:16px">
+        ${pic ? pic + '<div style="margin-top:10px"></div>' : ''}
+        <h1 style="font-size:26px;font-weight:700;margin:0">${esc(b.fullName) || "Your Name"}</h1>
+        <p style="font-size:15px;color:#475569;margin:4px 0 6px">${esc(b.headline) || "Role"}</p>
+        <p style="font-size:12px;color:#64748b;margin:0">${[b.email, b.phone, b.location].filter(Boolean).map(esc).join(' &bull; ')}</p>
+        <div style="font-size:11px;color:#64748b;margin-top:4px">
+            ${b.github ? `<i class="fab fa-github" style="margin-right:3px"></i>${esc(b.github)} &nbsp;` : ''}
+            ${b.linkedin ? `<i class="fab fa-linkedin" style="margin-right:3px"></i>${esc(b.linkedin)}` : ''}
+        </div>
+    </div>
+    <hr style="border:none;border-top:2px solid #1e293b;margin:16px 0">
+    ${b.summary ? `<div style="margin-bottom:16px"><h2 style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px">Professional Summary</h2><p style="font-size:13px;margin:0">${esc(b.summary)}</p></div>` : ''}
+    ${d.skills.technical?.length ? `<div style="margin-bottom:16px"><h2 style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px">Technical Skills</h2><p style="font-size:13px;margin:0">${d.skills.technical.map(esc).join(' &bull; ')}</p></div>` : ''}
+    ${d.skills.soft?.length ? `<div style="margin-bottom:16px"><h2 style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px">Soft Skills</h2><p style="font-size:13px;margin:0">${d.skills.soft.map(esc).join(' &bull; ')}</p></div>` : ''}
+    ${d.experience.length ? `<div style="margin-bottom:16px"><h2 style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px">Experience</h2>${d.experience.map(e => `<div style="margin-bottom:10px"><div style="font-size:14px;font-weight:600">${esc(e.role)} — ${esc(e.company)}</div><div style="font-size:11px;color:#64748b;margin:1px 0">${fD(e.startDate, e.endDate, e.current)}</div><p style="font-size:13px;margin:3px 0 0">${esc(e.highlights)}</p></div>`).join('')}</div>` : ''}
+    ${d.education.length ? `<div style="margin-bottom:16px"><h2 style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px">Education</h2>${d.education.map(e => `<div style="margin-bottom:8px"><div style="font-size:14px;font-weight:600">${esc(e.degree)}</div><div style="font-size:11px;color:#64748b">${fD(e.startDate, e.endDate, e.current)} — ${esc(e.institution)}</div>${e.details ? `<p style="font-size:12px;margin:2px 0 0">${esc(e.details)}</p>` : ''}</div>`).join('')}</div>` : ''}
+    ${d.projects.length ? `<div style="margin-bottom:16px"><h2 style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px">Projects</h2>${d.projects.map(p => `<div style="margin-bottom:8px"><div style="font-size:14px;font-weight:600">${esc(p.name)} <span style="font-size:11px;color:#64748b;font-weight:400">(${fD(p.startDate, p.endDate, false)})</span></div><div style="font-size:11px;font-family:monospace;color:#4f46e5">${esc(p.tech)}</div><p style="font-size:13px;margin:2px 0 0">${esc(p.description)}</p></div>`).join('')}</div>` : ''}
+    ${(d.achievements.length || d.languages.length) ? `<div style="margin-bottom:16px"><h2 style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:3px">Achievements &amp; Languages</h2>${d.achievements.length ? `<p style="font-size:13px;margin:0 0 4px">${d.achievements.map(esc).join(' &bull; ')}</p>` : ''}${d.languages.length ? `<p style="font-size:13px;margin:0">${d.languages.map(l => esc(l.name) + ' (' + esc(l.level) + ')').join(' &bull; ')}</p>` : ''}</div>` : ''}
+    <hr style="border:none;border-top:1px solid #cbd5e1;margin:20px 0 12px">
+    <div style="text-align:center">
+        <p style="font-size:10px;color:#94a3b8;margin:0 0 10px">Scan to connect</p>
+        ${qrRow(false)}
+    </div>
+</div>`;
+}
+function _sec(t, i, b) { return `<div><h3 style="font-size:1rem;font-weight:700;margin:0 0 8px;display:flex;align-items:center;gap:8px" class="cv-primary"><i class="fas ${i}"></i> ${t}</h3>${b}</div>`; }
+function _skS(t, i, a, tech) { if (!a?.length) return ''; return `<div style="margin-bottom:16px"><h3 style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px;display:flex;align-items:center;gap:4px" class="cv-primary"><i class="fas ${i}"></i> ${t}</h3><div style="display:flex;flex-wrap:wrap;gap:3px">${a.map(s => `<span class="chip text-xs"${tech ? '' : ` style="background:#e2e8f0"`}><i class="fas ${tech ? 'fa-check-circle text-indigo-400' : 'fa-heart text-pink-400'}" style="font-size:.6rem"></i>${esc(s)}</span>`).join('')}</div></div>`; }
+function _lgS(a) { if (!a?.length) return ''; return `<div style="margin-bottom:16px"><h3 style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px;display:flex;align-items:center;gap:4px" class="cv-primary"><i class="fas fa-language"></i> Languages</h3>${a.map(l => `<div style="font-size:.88rem;margin-bottom:2px"><i class="fas fa-comment-dots text-indigo-400" style="font-size:.7rem;margin-right:4px"></i>${esc(l.name)} <span style="color:#94a3b8">(${esc(l.level)})</span></div>`).join('')}</div>`; }
+function _acS(a) { if (!a?.length) return ''; return `<div><h3 style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px;display:flex;align-items:center;gap:4px" class="cv-primary"><i class="fas fa-trophy"></i> Achievements</h3><ul style="list-style:none;padding:0;margin:0">${a.slice(0, 5).map(x => `<li style="font-size:.78rem;display:flex;align-items:flex-start;gap:5px;margin-bottom:4px"><i class="fas fa-star text-amber-400" style="font-size:.6rem;margin-top:4px"></i><span>${esc(x)}</span></li>`).join('')}</ul></div>`; }
+function _expL(a) { return a.map(e => `<div style="margin-bottom:12px"><div style="font-size:.88rem;font-weight:600">${esc(e.role)} <span style="color:#94a3b8;font-weight:400">@</span> ${esc(e.company)}</div><div style="font-size:.75rem;color:#94a3b8;margin-bottom:3px"><i class="far fa-calendar-alt" style="margin-right:4px"></i>${fD(e.startDate, e.endDate, e.current)}</div><p style="font-size:.8rem;color:#475569;line-height:1.5;margin:0">${esc(e.highlights)}</p></div>`).join(''); }
+function _eduL(a) { return a.map(e => `<div style="margin-bottom:10px"><div style="font-size:.88rem;font-weight:600">${esc(e.degree)}</div><div style="font-size:.75rem;color:#94a3b8"><i class="far fa-calendar-alt" style="margin-right:4px"></i>${fD(e.startDate, e.endDate, e.current)} — ${esc(e.institution)}</div>${e.details ? `<p style="font-size:.78rem;color:#64748b;margin:2px 0 0">${esc(e.details)}</p>` : ''}</div>`).join(''); }
+function _projL(a) { return a.slice(0, 6).map(p => `<div style="margin-bottom:12px"><div style="font-size:.88rem;font-weight:500"><i class="fas fa-chevron-right text-indigo-400" style="font-size:.65rem;margin-right:4px"></i>${esc(p.name)} <span style="font-size:.75rem;color:#94a3b8">(${fD(p.startDate, p.endDate, false)})</span></div><div style="font-size:.75rem;font-family:ui-monospace,monospace" class="cv-primary">${esc(p.tech)}</div><p style="font-size:.8rem;color:#475569;line-height:1.5;margin:2px 0 0">${esc(p.description)}</p></div>`).join(''); }
+
+function refresh() { const vp = document.getElementById("prevVp"); if (!vp) return; vp.innerHTML = tpl === "classic" ? rClassic(cv) : rAts(cv); applySty(); }
+function applySty() { let t = document.getElementById("cvdyn"); if (!t) { t = document.createElement("style"); t.id = "cvdyn"; document.head.appendChild(t); } t.textContent = `.cv-primary{color:${sty.p}!important}.cv-secondary-bg{background:linear-gradient(135deg,${sty.p},${sty.s})!important}.chip{background:${sty.p}12!important}.bg-slate-50{background:#f8fafc}.bg-slate-100{background:#f1f5f9}`; const pg = document.querySelector("#prevVp .cv-page"); if (pg) pg.style.fontFamily = `'${sty.f}',sans-serif`; }
+
+/* ═══════════════ CLEAR ALL — RESET EVERYTHING ═══════════════ */
+function clearAllCVData() {
+    cv = structuredClone(EMPTY_CV);
+    saveLS();
+    toast(" All CV data cleared — complete empty slate", "s");
+    go(st);            // reload current step with empty data
+}
+/* ═══════════════ STEP FORMS (shortened but complete) ═══════════════ */
+function fHTML(s) { return [formB, formE, formX, formSk, formP, formFin][s](); }
+function formB() { const b = cv.basics; return `<h2 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-user-circle text-indigo-500"></i> Personal Info</h2><div class="bg-gradient-to-r from-indigo-50 to-violet-50 p-4 rounded-xl mb-4"><label class="fl"><i class="fas fa-camera mr-1"></i> Profile Picture</label><div class="flex gap-3 flex-wrap items-center"><label class="upbtn"><i class="fas fa-cloud-upload-alt"></i> Upload<input type="file" id="picUp" accept="image/*"></label><input id="picUrl" placeholder="Or paste image URL" class="fi flex-1" value="${esc(b.profilePicture.startsWith('http') ? b.profilePicture : '')}"></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="fl">Full Name</label><input id="fn" class="fi" value="${esc(b.fullName)}"></div><div><label class="fl">Headline</label><input id="fh" class="fi" value="${esc(b.headline)}"></div><div><label class="fl">Email</label><input id="fe" class="fi" value="${esc(b.email)}"></div><div><label class="fl">Phone</label><input id="fp" class="fi" value="${esc(b.phone)}"></div><div><label class="fl">Location</label><input id="flc" class="fi" value="${esc(b.location)}"></div><div><label class="fl">GitHub</label><input id="fg" class="fi" value="${esc(b.github)}"></div><div><label class="fl">LinkedIn</label><input id="fli" class="fi" value="${esc(b.linkedin)}"></div><div><label class="fl">Instagram</label><input id="fig" class="fi" value="${esc(b.instagram)}"></div><div><label class="fl">Facebook</label><input id="ffb" class="fi" value="${esc(b.facebook)}"></div><div><label class="fl">Portfolio</label><input id="fpo" class="fi" value="${esc(b.portfolio)}"></div></div><div class="mt-3"><label class="fl">Professional Summary</label><textarea id="fs" rows="3" class="fi">${esc(b.summary)}</textarea></div>`; }
+function formE() { return `<h2 class="text-lg font-bold mb-4"><i class="fas fa-graduation-cap text-indigo-500"></i> Education</h2><div id="eList">${cv.education.map((e,i)=>eC(e,i)).join('')}</div><button id="addE" class="mt-2 bg-indigo-50 border px-4 py-2 rounded-full text-sm hover:bg-indigo-100">+ Add Education</button>`; }
+function eC(e,i){return `<div class="border p-4 rounded-xl mb-3"><div class="grid grid-cols-2 gap-2 mb-2"><input placeholder="Degree" class="fi" value="${esc(e.degree)}" data-ed="${i}"><input placeholder="Institution" class="fi" value="${esc(e.institution)}" data-ei="${i}"></div><div class="flex gap-2 mb-2"><input type="month" class="fi" value="${e.startDate||''}" data-es="${i}"><input type="month" class="fi eend" value="${e.endDate||''}" data-ee="${i}" ${e.current?'disabled':''}><label class="flex items-center"><input type="checkbox" class="ecur" data-ec="${i}" ${e.current?'checked':''}> Current</label></div><textarea placeholder="Details" rows="2" class="fi" data-et="${i}">${esc(e.details)}</textarea><button class="rme text-red-500 text-xs mt-2" data-i="${i}">Remove</button></div>`; }
+function formX() { return `<h2 class="text-lg font-bold mb-4"><i class="fas fa-briefcase text-indigo-500"></i> Work Experience</h2><div id="xList">${cv.experience.map((e,i)=>xC(e,i)).join('')}</div><button id="addX" class="mt-2 bg-indigo-50 border px-4 py-2 rounded-full text-sm">+ Add Experience</button>`; }
+function xC(e,i){return `<div class="border p-4 rounded-xl mb-3"><div class="grid grid-cols-2 gap-2 mb-2"><input placeholder="Job Title" class="fi" value="${esc(e.role)}" data-xr="${i}"><input placeholder="Company" class="fi" value="${esc(e.company)}" data-xc="${i}"></div><div class="flex gap-2 mb-2"><input type="month" class="fi" value="${e.startDate||''}" data-xs="${i}"><input type="month" class="fi xend" value="${e.endDate||''}" data-xe="${i}" ${e.current?'disabled':''}><label class="flex items-center"><input type="checkbox" class="xcur" data-xu="${i}" ${e.current?'checked':''}> Current</label></div><textarea placeholder="Highlights" rows="2" class="fi" data-xh="${i}">${esc(e.highlights)}</textarea><button class="rmx text-red-500 text-xs mt-2" data-i="${i}">Remove</button></div>`; }
+function formSk() { return `<h2 class="text-lg font-bold mb-4">Skills & Languages</h2><div class="mb-4"><label class="fl">Technical Skills</label><div class="flex gap-2 mb-2"><input id="nT" placeholder="React" class="fi flex-1"><button id="aT" class="bg-slate-200 px-4 rounded-lg">+ Add</button></div><div id="tL">${cv.skills.technical.map(s=>`<span class="chip">${esc(s)} <span class="rms cursor-pointer text-red-400" data-t="t" data-v="${esc(s)}"><i class="fas fa-times-circle"></i></span></span>`).join('')}</div></div><div class="mb-4"><label class="fl">Soft Skills</label><div class="flex gap-2"><input id="nS" class="fi flex-1"><button id="aS" class="bg-slate-200 px-4 rounded-lg">+ Add</button></div><div id="sL">${cv.skills.soft.map(s=>`<span class="chip">${esc(s)} <span class="rms text-red-400" data-t="s" data-v="${esc(s)}"><i class="fas fa-times-circle"></i></span></span>`).join('')}</div></div><div class="mb-4"><label class="fl">Languages</label><div id="lgL">${cv.languages.map((l,i)=>`<div class="flex gap-2 mb-2"><input class="fi" value="${esc(l.name)}" data-ln="${i}"><select class="fi" data-ll="${i}"><option ${l.level==='Native'?'selected':''}>Native</option><option ${l.level==='Fluent'?'selected':''}>Fluent</option><option ${l.level==='Intermediate'?'selected':''}>Intermediate</option><option ${l.level==='Basic'?'selected':''}>Basic</option></select><button class="rmlg text-red-500" data-i="${i}"><i class="fas fa-trash"></i></button></div>`).join('')}</div><button id="aL" class="text-xs bg-slate-100 px-3 py-1 rounded-full">+ Language</button></div><textarea id="achIn" rows="3" class="fi" placeholder="Achievements (one per line)">${cv.achievements.join("\n")}</textarea>`; }
+function formP() { return `<h2 class="text-lg font-bold mb-4">Projects</h2><div id="pList">${cv.projects.map((p,i)=>pC(p,i)).join('')}</div><button id="addP" class="mt-2 bg-indigo-50 border px-4 py-2 rounded-full text-sm">+ Add Project</button>`; }
+function pC(p,i){return `<div class="border p-4 rounded-xl mb-3"><div class="grid grid-cols-2 gap-2"><input placeholder="Project Name" class="fi" value="${esc(p.name)}" data-pn="${i}"><input placeholder="Technologies" class="fi" value="${esc(p.tech)}" data-pt="${i}"></div><div class="flex gap-2 my-2"><input type="month" class="fi" value="${p.startDate||''}" data-ps="${i}"><input type="month" class="fi" value="${p.endDate||''}" data-pe="${i}"></div><textarea placeholder="Description" rows="2" class="fi" data-pd="${i}">${esc(p.description)}</textarea><button class="rmp text-red-500 text-xs mt-2" data-i="${i}">Remove</button></div>`; }
+function formFin() { const filled = [cv.basics.fullName && "Name", cv.basics.email && "Email", cv.basics.summary && "Summary", cv.education.length && "Education", cv.experience.length && "Experience", cv.skills.technical?.length && "Tech Skills", cv.projects.length && "Projects"].filter(Boolean); const pct = Math.round((filled.length / 7) * 100); return `<h2 class="text-lg font-bold mb-4">Final Review</h2><div class="bg-green-50 border border-green-200 rounded-xl p-5 mb-4"><h3 class="font-bold text-green-800">Completion: ${pct}%</h3><div class="prog-track mb-3"><div class="prog-fill" style="width:${pct}%;background:linear-gradient(90deg,#059669,#10b981)"></div></div><ul class="text-sm space-y-1">${["Name","Email","Summary","Education","Experience","Tech Skills","Projects"].map(it=>`<li class="flex items-center gap-2">${filled.includes(it)?'<i class="fas fa-check-circle text-green-500"></i>':'<i class="fas fa-circle text-slate-300"></i>'} ${it}</li>`).join('')}</ul></div><div class="bg-indigo-50 rounded-xl p-5 mb-4"><h3 class="font-bold text-indigo-800 mb-3">Generate PDF</h3><button id="finPdf" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 font-semibold"><i class="fas fa-print"></i> Print / Save as PDF</button></div><div class="grid grid-cols-3 gap-3 mb-4"><button id="finJ" class="bg-slate-700 text-white px-4 py-2 rounded-xl font-semibold text-sm">Export JSON</button><button id="finR" class="bg-red-50 text-red-700 px-4 py-2 rounded-xl border border-red-200">Reset Example</button><button id="clearAllFinish" class="bg-rose-50 text-rose-700 px-4 py-2 rounded-xl border border-rose-200"><i class="fas fa-trash-alt"></i> Clear All</button></div><div class="bg-amber-50 rounded-xl p-4 text-sm">⚠️ Clear All: removes ALL data, empty CV.</div>`; }
+
+/* Sync & step events */
+function syncStep() { if(st===0) syncB(); else if(st===1) syncEd(); else if(st===2) syncEx(); else if(st===3) syncSk(); else if(st===4) syncPr(); else syncB(); }
+function syncB() { const b=cv.basics; b.fullName=g("fn"); b.headline=g("fh"); b.email=g("fe"); b.phone=g("fp"); b.location=g("flc"); b.github=g("fg"); b.linkedin=g("fli"); b.instagram=g("fig"); b.facebook=g("ffb"); b.portfolio=g("fpo"); b.summary=g("fs"); const url=g("picUrl"); if(url&&url.startsWith('http')) b.profilePicture=url; }
+function syncEd(){cv.education.forEach((e,i)=>{e.degree=qv("ed",i); e.institution=qv("ei",i); e.startDate=qv("es",i); e.endDate=qv("ee",i); e.current=!!document.querySelector(`[data-ec="${i}"]`)?.checked; e.details=qv("et",i);});}
+function syncEx(){cv.experience.forEach((e,i)=>{e.role=qv("xr",i); e.company=qv("xc",i); e.startDate=qv("xs",i); e.endDate=qv("xe",i); e.current=!!document.querySelector(`[data-xu="${i}"]`)?.checked; e.highlights=qv("xh",i);});}
+function syncPr(){cv.projects.forEach((p,i)=>{p.name=qv("pn",i); p.tech=qv("pt",i); p.startDate=qv("ps",i); p.endDate=qv("pe",i); p.description=qv("pd",i);});}
+function syncSk(){cv.languages.forEach((l,i)=>{const n=document.querySelector(`[data-ln="${i}"]`),v=document.querySelector(`[data-ll="${i}"]`);if(n) l.name=n.value;if(v) l.level=v.value;});const a=document.getElementById("achIn")?.value.split("\n").filter(l=>l.trim());if(a) cv.achievements=a;}
+function qv(s,i){return document.querySelector(`[data-${s}="${i}"]`)?.value??"";}
+function g(id){return document.getElementById(id)?.value??"";}
+function attB() { document.getElementById("picUp")?.addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async ev=>{cv.basics.profilePicture=await compressImg(ev.target.result);refresh();saveLS();};r.readAsDataURL(f);});live("#fn,#fh,#fe,#fp,#flc,#fg,#fli,#fig,#ffb,#fpo,#fs,#picUrl",syncB);}
+function attE(){document.getElementById("addE")?.addEventListener("click",()=>{cv.education.push({degree:"",institution:"",startDate:"",endDate:"",current:false,details:""});go(1);});document.querySelectorAll(".rme").forEach(b=>b.addEventListener("click",()=>{cv.education.splice(+b.dataset.i,1);go(1);}));document.querySelectorAll(".ecur").forEach(cb=>cb.addEventListener("change",()=>{const i=+cb.dataset.ec;const ei=document.querySelector(`[data-ee="${i}"]`);if(ei)ei.disabled=cb.checked;syncEd();refresh();saveLS();}));live("[data-ed],[data-ei],[data-es],[data-ee],[data-et]",syncEd);}
+function attX(){document.getElementById("addX")?.addEventListener("click",()=>{cv.experience.push({role:"",company:"",startDate:"",endDate:"",current:false,highlights:""});go(2);});document.querySelectorAll(".rmx").forEach(b=>b.addEventListener("click",()=>{cv.experience.splice(+b.dataset.i,1);go(2);}));document.querySelectorAll(".xcur").forEach(cb=>cb.addEventListener("change",()=>{const i=+cb.dataset.xu;const ei=document.querySelector(`[data-xe="${i}"]`);if(ei)ei.disabled=cb.checked;syncEx();refresh();saveLS();}));live("[data-xr],[data-xc],[data-xs],[data-xe],[data-xh]",syncEx);}
+function attSk(){document.getElementById("aT")?.addEventListener("click",()=>{const v=document.getElementById("nT")?.value.trim();if(v){cv.skills.technical.push(v);reloadForm();}});document.getElementById("aS")?.addEventListener("click",()=>{const v=document.getElementById("nS")?.value.trim();if(v){cv.skills.soft.push(v);reloadForm();}});document.querySelectorAll(".rms").forEach(el=>el.addEventListener("click",()=>{const t=el.dataset.t==='t'?'technical':'soft';cv.skills[t]=cv.skills[t].filter(s=>s!==el.dataset.v);reloadForm();}));document.getElementById("aL")?.addEventListener("click",()=>{cv.languages.push({name:"",level:"Fluent"});reloadForm();});document.querySelectorAll(".rmlg").forEach(b=>b.addEventListener("click",()=>{cv.languages.splice(+b.dataset.i,1);reloadForm();}));live("[data-ln],[data-ll]",syncSk);document.getElementById("achIn")?.addEventListener("input",()=>{syncSk();refresh();saveLS();});}
+function attP(){document.getElementById("addP")?.addEventListener("click",()=>{cv.projects.push({name:"",tech:"",startDate:"",endDate:"",description:""});go(4);});document.querySelectorAll(".rmp").forEach(b=>b.addEventListener("click",()=>{cv.projects.splice(+b.dataset.i,1);go(4);}));live("[data-pn],[data-pt],[data-ps],[data-pe],[data-pd]",syncPr);}
+function attFin(){document.getElementById("finPdf")?.addEventListener("click",printPDF);document.getElementById("finJ")?.addEventListener("click",expJSON);document.getElementById("finR")?.addEventListener("click",()=>{cv=structuredClone(DEF);saveLS();go(5);toast("Reset to example data","i");});document.getElementById("clearAllFinish")?.addEventListener("click",clearAllCVData);}
+function reloadForm(){document.getElementById("formArea").innerHTML=fHTML(st);attStep();refresh();saveLS();}
+function attStep(){[attB,attE,attX,attSk,attP,attFin][st]();}
+function live(sel,fn){document.querySelectorAll(sel).forEach(el=>el.addEventListener("input",()=>{fn();refresh();saveLS();}));}
+function go(s){syncStep();st=s;document.getElementById("formArea").innerHTML=fHTML(s);const pct=Math.round(((s+1)/TS)*100);document.getElementById("pBar").style.width=pct+"%";document.getElementById("pLbl").textContent=pct+"%";document.querySelectorAll(".pill").forEach((p,i)=>{p.classList.remove("on","ok");if(i===s)p.classList.add("on");else if(i<s)p.classList.add("ok");});attStep();refresh();saveLS();}
+function printPDF(){syncStep();const cvHTML=tpl==="classic"?rClassic(cv):rAts(cv);const w=window.open('','_blank','width=950,height=750');if(!w){toast("Popup blocked","e");return;}w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(cv.basics.fullName)||"CV"}</title><script src="https://cdn.tailwindcss.com"><\/script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet"><style>@page{size:A4;margin:8mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:'${sty.f}',sans-serif;margin:0;padding:10px}.cv-primary{color:${sty.p}!important}.cv-secondary-bg{background:linear-gradient(135deg,${sty.p},${sty.s})!important}.chip{background:${sty.p}12!important}</style></head><body>${cvHTML}</body></html>`);w.document.close();setTimeout(()=>{w.focus();w.print();},2000);}
+function expJSON(){syncStep();const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(cv,null,2)],{type:"application/json"}));a.download=(cv.basics.fullName||"cv")+"_data.json";a.click();toast("JSON exported","s");}
+function impJSON(file){const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);cv={...structuredClone(EMPTY_CV),...d};if(!Array.isArray(cv.education))cv.education=[];if(!Array.isArray(cv.experience))cv.experience=[];if(!Array.isArray(cv.projects))cv.projects=[];if(!Array.isArray(cv.achievements))cv.achievements=[];if(!Array.isArray(cv.languages))cv.languages=[];if(!cv.skills)cv.skills={technical:[],soft:[]};go(st);toast("Imported successfully","s");}catch(e){toast("Invalid JSON","e");}};r.readAsText(file);}
+function saveLS(){try{localStorage.setItem('cvforge',JSON.stringify(cv));localStorage.setItem('cvforge_sty',JSON.stringify(sty));localStorage.setItem('cvforge_tpl',tpl);}catch(e){const c={...cv,basics:{...cv.basics,profilePicture:''}};localStorage.setItem('cvforge',JSON.stringify(c));}}
+function loadLS(){try{const d=localStorage.getItem('cvforge');if(d)cv={...structuredClone(EMPTY_CV),...JSON.parse(d)};const s=localStorage.getItem('cvforge_sty');if(s)sty={...sty,...JSON.parse(s)};const t=localStorage.getItem('cvforge_tpl');if(t)tpl=t;}catch(e){}}
+document.getElementById("btnNext").addEventListener("click",()=>{syncStep();if(st<TS-1)go(st+1);});
+document.getElementById("btnPrev").addEventListener("click",()=>{if(st>0)go(st-1);});
+document.querySelectorAll(".pill").forEach(p=>p.addEventListener("click",()=>go(+p.dataset.s)));
+document.getElementById("inP").addEventListener("input",e=>{sty.p=e.target.value;refresh();saveLS();});
+document.getElementById("inS").addEventListener("input",e=>{sty.s=e.target.value;refresh();saveLS();});
+document.getElementById("inF").addEventListener("change",e=>{sty.f=e.target.value;refresh();saveLS();});
+document.getElementById("inT").addEventListener("change",e=>{tpl=e.target.value;refresh();saveLS();});
+document.getElementById("btnPdf2").addEventListener("click",printPDF);
+document.getElementById("btnHdrP").addEventListener("click",printPDF);
+document.getElementById("btnExpJ2").addEventListener("click",expJSON);
+document.getElementById("btnExJ").addEventListener("click",()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(DEF,null,2)],{type:"application/json"}));a.download="cv_example_format.json";a.click();toast("Example JSON downloaded","i");});
+document.getElementById("btnImpJ").addEventListener("click",()=>document.getElementById("jsonIn").click());
+document.getElementById("jsonIn").addEventListener("change",e=>{if(e.target.files[0])impJSON(e.target.files[0]);e.target.value="";});
+document.getElementById("btnClearAllHeader").addEventListener("click",clearAllCVData);
+function restoreUI(){document.getElementById("inP").value=sty.p;document.getElementById("inS").value=sty.s;document.getElementById("inF").value=sty.f;document.getElementById("inT").value=tpl;}
+loadLS();restoreUI();go(0);
+</script>
+</body>
+</html>
